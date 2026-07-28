@@ -1,4 +1,4 @@
-# Interlingua — A2A Agents
+# Interlingua — A2A Agents (Smart Convergence)
 
 Inspired by the movie *Project Hail Mary*: an astronaut (Grace) and an alien (Rocky) build a shared language from scratch using A2A protocol. No shared memory — just two beings passing symbols back and forth until they understand each other.
 
@@ -13,30 +13,41 @@ Inspired by the movie *Project Hail Mary*: an astronaut (Grace) and an alien (Ro
 
 No pre-existing language. The signals are arbitrary. But if both players want to coordinate, they converge on a stable mapping — each meaning gets a unique signal. Lewis called this a **signaling convention**: self-reinforcing because neither player benefits from deviating once established.
 
-Nobody sat down and decided "✦ means fire." It emerged from repeated successful coordination. Any consistent mapping works equally well — the one that sticks is arbitrary but stable.
+### Smart Convergence Enhancement
 
-That's what Grace and Rocky do here: Grace proposes symbols for concepts, Rocky adopts them, rounds repeat until they share a dictionary neither designed but both follow.
+This branch adds three optimizations that reduce convergence from ~10-20 rounds to 1-5 rounds:
 
-Our implementation targets disagreements first and exits early once fully aligned.
+| Feature | What it does | Why it helps |
+|---------|-------------|-------------|
+| **Mutual exclusivity** | `coin_exclusive()` never picks a symbol already mapped in either lexicon | Eliminates collisions that waste rounds |
+| **Batch proposals** | Propose ALL disagreements in one round instead of one-at-a-time | Resolves 10 meanings in 1-3 rounds, not 10-20 |
+| **Confidence scores** | Each mapping has a confidence (0.5–1.0); lower yields to higher | Prevents flip-flopping; established mappings are stable |
 
 ### Implementation (`signaling.py`)
 
-Three primitives power the entire negotiation:
+| Primitive | What it does |
+|-----------|-------------|
+| `coin_exclusive(mine, theirs)` | Pick a symbol free in BOTH lexicons (one-to-one guarantee) |
+| `propose_batch(mine, theirs)` | Generate proposals for all unresolved meanings at once |
+| `resolve_batch(my_lex, proposals)` | Process incoming batch — confidence determines who yields |
+| `get_symbol(lex, meaning)` | Extract symbol from lexicon entry (handles both formats) |
+| `get_confidence(lex, meaning)` | Extract confidence from lexicon entry |
 
-| Primitive | What it does | Role in the game |
-|-----------|-------------|------------------|
-| `coin(mine, theirs)` | Pick a random symbol not yet used by either agent | **Innovation** — introduce a novel sign into the channel |
-| `adopt(lex, meaning, symbol)` | Accept the speaker's symbol for a meaning; remove any conflicting mappings | **Alignment** — convention spreads by imitation |
-| `alignment(a, b)` | Fraction of meanings where both agents agree on the same symbol | **Convergence check** — 1.0 means a fully shared language |
+Confidence levels:
+- `COINED = 0.5` — freshly invented, arbitrary
+- `ADOPTED = 0.7` — accepted from peer, socially validated
+- `AGREED = 1.0` — both agents have same mapping, settled
 
 The loop:
 
-1. Speaker picks a meaning that the two agents disagree on
-2. Speaker **coins** a symbol (or reuses one it already has)
-3. Listener **adopts** that symbol — overwrites its own mapping
-4. Measure **alignment** — if 1.0, stop; otherwise next round
+1. Speaker generates **batch proposals** for all disagreements
+2. Listener runs `resolve_batch` — for each proposal, compare confidence:
+   - Their confidence >= mine → adopt (yield)
+   - Their confidence < mine → reject (keep mine)
+3. Listener proposes back with their own batch
+4. Measure alignment — if 1.0, stop; otherwise next round
 
-There is no reward signal, no gradient, no central dictionary. The language emerges purely from use and imitation — exactly the dynamic Lewis described in 1969.
+Converges in **1-5 rounds** for 10 meanings (vs. 10-20 without batching).
 
 References:
 - Lewis, *Convention* (1969) — https://plato.stanford.edu/entries/convention/
@@ -47,42 +58,52 @@ References:
 No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. The A2A message metadata **is** the memory. Every message carries the full game state:
 
 ```
-grace_lex   →  Grace's full dictionary       (e.g. {"fire": "✦", "river": "≈", ...})
-rocky_lex   →  Rocky's full dictionary       (e.g. {"fire": "○", "river": "△", ...})
-round       →  how many rounds have passed   (e.g. 7)
-referent    →  concept being discussed       (e.g. "river")
-message     →  symbol being proposed         (e.g. "≈")
+grace_lex   →  Grace's full dictionary with confidence
+              (e.g. {"fire": {"symbol": "✦", "confidence": 0.7}, ...})
+rocky_lex   →  Rocky's full dictionary with confidence
+round       →  how many rounds have passed
+proposals   →  batch of proposals being sent
+              (e.g. [{"referent": "river", "symbol": "≈", "confidence": 0.5}, ...])
+```
+
+Lexicon format (with confidence):
+```json
+{
+  "fire": {"symbol": "✦", "confidence": 0.7},
+  "river": {"symbol": "≈", "confidence": 0.5},
+  "moon": {"symbol": "○", "confidence": 1.0}
+}
 ```
 
 Each agent reads state from the incoming message, does one step, and writes updated state into the outgoing message. When the function returns, all local variables are gone — the only surviving copy of the game state is the message that was just sent.
-
-Kill either agent mid-game, restart it, and the next call still works — because everything the agent needs is in that call's metadata.
 
 ## A2A Ping-Pong Flow
 
 ```
 Mission Control (curl) ──trigger──▶ Grace (:9101)
                                       │
-                                      ▼  coin symbol, send state
+                                      ▼  init random lexicons (conf=0.5)
+                                      ▼  propose_batch() → all 10 meanings
+                                      │
                                     Rocky (:9102)
                                       │
-                                      ▼  adopt, coin, send state
+                                      ▼  resolve_batch() — adopt if conf ≥ mine
+                                      ▼  check alignment → not 1.0
+                                      ▼  propose_batch() → remaining disagreements
+                                      │
                                     Grace (:9101)
                                       │
-                                      ▼  adopt, coin, send state
-                                    Rocky (:9102)
-                                      │
-                                     ...
-                                      │
-                                      ▼  alignment == 1.0 → stop
-                                    (response unwinds back)
+                                      ▼  resolve_batch() — adopt if conf ≥ mine
+                                      ▼  check alignment → 1.0 ✓ STOP
                                       │
 Mission Control ◀──final result────────┘
 ```
 
+Typical game: **1-3 rounds** (all 10 meanings batched per round).
+
 - **Mission Control → Grace**: one trigger, no game state (just `{"text": "start"}`)
-- **Grace ↔ Rocky**: agents call each other back and forth, each passing the full game state in metadata
-- **Stop**: whichever agent sees `alignment == 1.0` or `round >= 60` just responds instead of calling the other — the response chain unwinds back to Mission Control
+- **Grace ↔ Rocky**: each round sends ALL unresolved proposals at once with confidence scores
+- **Stop**: whichever agent sees `alignment == 1.0` or `round >= 60` responds instead of calling the other
 
 Both agents are server AND client. No external loop driver needed.
 
@@ -90,11 +111,10 @@ Both agents are server AND client. No external loop driver needed.
 
 | Field | Meaning |
 |-------|---------|
-| `context.grace_lex` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
-| `context.rocky_lex` | Rocky's lexicon |
+| `context.grace_lex` | Grace's lexicon with confidence scores |
+| `context.rocky_lex` | Rocky's lexicon with confidence scores |
 | `context.round` | Current round number |
-| `context.referent` | The concept being discussed this round |
-| `message` | The symbol being proposed |
+| `proposals` | Batch of proposals: `[{referent, symbol, confidence}, ...]` |
 
 ### Full A2A Message (Grace → Rocky)
 
@@ -111,41 +131,28 @@ Both agents are server AND client. No external loop driver needed.
       "extensions": ["https://example.com/ext/emergent-lang/v1"],
       "metadata": {
         "https://example.com/ext/emergent-lang/v1/context": {
-          "grace_lex": {"fire": "✦", "river": "≈", "moon": "○"},
-          "rocky_lex": {"fire": "○", "river": "△", "moon": "✦"},
-          "round": 3,
-          "referent": "river"
+          "grace_lex": {
+            "fire": {"symbol": "✦", "confidence": 0.5},
+            "river": {"symbol": "≈", "confidence": 0.5},
+            "moon": {"symbol": "○", "confidence": 0.5}
+          },
+          "rocky_lex": {
+            "fire": {"symbol": "△", "confidence": 0.5},
+            "river": {"symbol": "▽", "confidence": 0.5},
+            "moon": {"symbol": "◆", "confidence": 0.5}
+          },
+          "round": 1
         },
-        "https://example.com/ext/emergent-lang/v1/message": "≈"
+        "https://example.com/ext/emergent-lang/v1/proposals": [
+          {"referent": "fire", "symbol": "✦", "confidence": 0.5},
+          {"referent": "river", "symbol": "≈", "confidence": 0.5},
+          {"referent": "moon", "symbol": "○", "confidence": 0.5}
+        ]
       }
     }
   }
 }
 ```
-
-### Stop Response (from whichever agent converges)
-
-```json
-{
-  "message": {
-    "messageId": "b4a8d1...",
-    "role": "ROLE_AGENT",
-    "parts": [{"text": "done | rounds: 10 | alignment: 100% | grace: {...} | rocky: {...}"}],
-    "extensions": ["https://example.com/ext/emergent-lang/v1"],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"fire": "✦", "river": "≈", ...},
-        "rocky_lex": {"fire": "✦", "river": "≈", ...},
-        "round": 10
-      }
-    }
-  }
-}
-```
-
-## Convergence
-
-10 meanings, both agents adopt unconditionally. Each round resolves one disagreement. Converges in ~10-20 rounds (depending on randomized initial conflict). Max 60 rounds before giving up.
 
 ## A2A over HTTP
 
@@ -167,35 +174,36 @@ uvicorn.run(app, host="localhost", port=9101)
 ```python
 rocky = await create_client("http://localhost:9102", ClientConfig(streaming=False))
 req = SendMessageRequest(message=Message(..., extensions=[EXT]))
-req.metadata.update({CONTEXT: {...}, MESSAGE: sym})
+req.metadata.update({CONTEXT: {...}, PROPOSALS: [...]})
 
 async for ev in rocky.send_message(req):
-    # ev.message — the A2A response (parts, metadata, extensions)
+    # ev.message — the A2A response
 ```
-
-`create_client(url)` discovers the agent card, then sends `SendMessage` as JSON-RPC POST.
 
 ### Message Passing
 
-Game state travels in A2A extension metadata on every message:
+Game state + batch proposals travel in A2A extension metadata:
 
 ```python
 # Outgoing (client writes)
 req.metadata.update({
     "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {...}, "rocky_lex": {...}, "round": 3, "referent": "river"
+        "grace_lex": {...}, "rocky_lex": {...}, "round": 1
     },
-    "https://example.com/ext/emergent-lang/v1/message": "≈",
+    "https://example.com/ext/emergent-lang/v1/proposals": [
+        {"referent": "fire", "symbol": "✦", "confidence": 0.5},
+        {"referent": "river", "symbol": "≈", "confidence": 0.5},
+    ],
 })
 
 # Incoming (server reads)
 md = context.metadata or {}
 ctx = md.get(CONTEXT) or {}
 grace_lex = ctx.get("grace_lex", {})
-signal = md.get(MESSAGE)
+proposals = md.get(PROPOSALS, [])
 ```
 
-No shared memory, no database — just A2A messages carrying state back and forth over HTTP.
+No shared memory, no database — just A2A messages carrying state + proposals back and forth over HTTP.
 
 ## Run
 
@@ -227,57 +235,29 @@ curl -s http://localhost:9101/ \
   }' | python -m json.tool
 ```
 
-### Expected response
-
-```json
-{
-  "jsonrpc": "2.0",
-  "id": "1",
-  "result": {
-    "message": {
-      "parts": [
-        {"text": "done | rounds: 12 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', ...} | rocky: {'apple': '✦', 'dance': '≈', ...}"}
-      ],
-      "metadata": {
-        "https://example.com/ext/emergent-lang/v1/context": {
-          "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
-          "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
-          "round": 12
-        }
-      }
-    }
-  }
-}
-```
-
-Both lexicons are identical — all 10 meanings converged. The symbols are random each run but always match between agents.
-
 ### Verify agent cards
 
 ```bash
-# Grace's identity
 curl -s http://localhost:9101/.well-known/agent.json | python -m json.tool
-
-# Rocky's identity
 curl -s http://localhost:9102/.well-known/agent.json | python -m json.tool
 ```
 
 ## Tests
 
 ```bash
-# Unit tests (no servers needed — mocks the A2A calls)
+# Unit tests (no servers needed)
 pytest test_agents.py -m 'not integration' -v
 
-# Integration test (starts both servers, triggers full game, asserts 100% convergence)
+# Integration test (starts both servers, asserts convergence in <= 5 rounds)
 pytest test_agents.py -m integration -v
 ```
 
 ## Files
 
 ```
-signaling.py      — Game logic (coin, adopt, alignment) — 10 meanings
+signaling.py      — Game logic (coin_exclusive, propose_batch, resolve_batch) — 10 meanings
 grace_agent.py    — Stateless ping-pong agent + A2A server/client (Grace)
 rocky_agent.py    — Stateless ping-pong agent + A2A server/client (Rocky)
-test_agents.py    — Unit + integration tests
+test_agents.py    — Unit + integration tests (40 unit + 2 integration)
 requirements.txt  — Dependencies
 ```

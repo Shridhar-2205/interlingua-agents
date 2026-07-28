@@ -1,193 +1,181 @@
-# Scenarios — A2A Message Passing
+# Scenarios — A2A Message Passing (Smart Convergence)
 
-## Scenario 1: Agreement (convergence in 3 rounds)
+## Scenario 1: Batch convergence in 2 rounds
 
-Starting state: 3 meanings, agents disagree on all.
+Starting state: 3 meanings, agents disagree on all. Batch proposals resolve everything in 2 rounds.
 
-### Round 1 — Grace speaks, Rocky listens
+### Round 1 — Grace batch-proposes all disagreements
 
-**Grace → Rocky:**
-```json
-{
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-      "rocky_lex": {"apple": "○", "dance": "◆", "river": "▽"},
-      "round": 1,
-      "referent": "apple"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "✦"
-  }
-}
-```
-
-Rocky adopts: `"apple" → "✦"` (was "○")
-
-**Rocky → Grace:**
-```json
-{
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-      "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
-      "round": 2,
-      "referent": "dance"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "◆"
-  }
-}
-```
-
-Grace adopts: `"dance" → "◆"` (was "≈")
-
-### Round 2 — Grace speaks, Rocky listens
+Grace generates proposals for all 3 unresolved meanings at once:
 
 **Grace → Rocky:**
 ```json
 {
   "metadata": {
     "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-      "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
-      "round": 3,
-      "referent": "river"
+      "grace_lex": {
+        "apple": {"symbol": "✦", "confidence": 0.5},
+        "dance": {"symbol": "≈", "confidence": 0.5},
+        "river": {"symbol": "△", "confidence": 0.5}
+      },
+      "rocky_lex": {
+        "apple": {"symbol": "○", "confidence": 0.5},
+        "dance": {"symbol": "◆", "confidence": 0.5},
+        "river": {"symbol": "▽", "confidence": 0.5}
+      },
+      "round": 1
     },
-    "https://example.com/ext/emergent-lang/v1/message": "△"
+    "https://example.com/ext/emergent-lang/v1/proposals": [
+      {"referent": "apple", "symbol": "✦", "confidence": 0.5},
+      {"referent": "dance", "symbol": "≈", "confidence": 0.5},
+      {"referent": "river", "symbol": "△", "confidence": 0.5}
+    ]
   }
 }
 ```
 
-Rocky adopts: `"river" → "△"` (was "▽")
+Rocky runs `resolve_batch`:
+- `apple`: Grace conf=0.5, Rocky conf=0.5 → equal, **adopt** Grace's "✦"
+- `dance`: Grace conf=0.5, Rocky conf=0.5 → equal, **adopt** Grace's "≈"
+- `river`: Grace conf=0.5, Rocky conf=0.5 → equal, **adopt** Grace's "△"
 
-### Round 3 — Alignment check → DONE
+Rocky's lexicon after: `{"apple": {"symbol": "✦", "confidence": 0.7}, "dance": {"symbol": "≈", "confidence": 0.7}, "river": {"symbol": "△", "confidence": 0.7}}`
 
-Rocky checks: `alignment == 1.0` (all 3 meanings match)
+### Round 2 — Rocky checks alignment → DONE
 
-**Rocky responds (no further call):**
+Rocky sees alignment = 1.0, responds:
+
 ```json
 {
   "message": {
-    "parts": [{"text": "done | rounds: 3 | alignment: 100% | grace: {'apple': '✦', 'dance': '◆', 'river': '△'} | rocky: {'apple': '✦', 'dance': '◆', 'river': '△'}"}],
+    "parts": [{"text": "done | rounds: 1 | alignment: 100% | grace: {...} | rocky: {...}"}],
     "metadata": {
       "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-        "rocky_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-        "round": 3
+        "grace_lex": {
+          "apple": {"symbol": "✦", "confidence": 0.5},
+          "dance": {"symbol": "≈", "confidence": 0.5},
+          "river": {"symbol": "△", "confidence": 0.5}
+        },
+        "rocky_lex": {
+          "apple": {"symbol": "✦", "confidence": 0.7},
+          "dance": {"symbol": "≈", "confidence": 0.7},
+          "river": {"symbol": "△", "confidence": 0.7}
+        },
+        "round": 1
       }
     }
   }
 }
 ```
 
-Response unwinds back to Mission Control. Game over.
+All 3 meanings resolved in **1 round** (vs. 3 rounds without batching).
 
 ---
 
-## Scenario 2: Disagreement (conflict resolution)
+## Scenario 2: Confidence-based yielding
 
-Starting state: Rocky has `"fire" → "✦"` and Grace has `"moon" → "✦"` — same symbol, different meanings. This is a **conflict**.
+Starting state: Rocky has `"fire" → "✦"` with confidence 0.7 (adopted). Grace has `"fire" → "○"` with confidence 0.5 (coined).
 
-### Round N — Grace speaks "moon = ✦"
+### Grace proposes batch including fire
 
 **Grace → Rocky:**
 ```json
 {
   "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"moon": "✦", "fire": "○"},
-      "rocky_lex": {"moon": "◆", "fire": "✦"},
-      "round": 5,
-      "referent": "moon"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "✦"
+    "https://example.com/ext/emergent-lang/v1/proposals": [
+      {"referent": "fire", "symbol": "○", "confidence": 0.5}
+    ]
   }
 }
 ```
 
-Rocky runs `adopt(rocky_lex, "moon", "✦")`:
-1. Finds conflict: `"fire"` also maps to `"✦"`
-2. Removes the conflicting mapping: `del rocky_lex["fire"]`
-3. Sets: `rocky_lex["moon"] = "✦"`
+Rocky runs `resolve_batch`:
+- `fire`: Grace conf=0.5, Rocky conf=0.7 → Rocky's confidence is **higher** → **reject**
+- Rocky keeps `"fire" → "✦"` (confidence 0.7)
 
-Rocky's lexicon is now: `{"moon": "✦"}` — he lost "fire" entirely.
-
-### Round N+1 — Rocky re-coins "fire"
-
-Rocky sees `"fire"` is unresolved (Grace has it, Rocky doesn't). He coins a fresh symbol.
+### Rocky proposes back
 
 **Rocky → Grace:**
 ```json
 {
   "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"moon": "✦", "fire": "○"},
-      "rocky_lex": {"moon": "✦", "fire": "☆"},
-      "round": 6,
-      "referent": "fire"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "☆"
+    "https://example.com/ext/emergent-lang/v1/proposals": [
+      {"referent": "fire", "symbol": "✦", "confidence": 0.7}
+    ]
   }
 }
 ```
 
-Grace adopts: `"fire" → "☆"` (was "○")
+Grace runs `resolve_batch`:
+- `fire`: Rocky conf=0.7, Grace conf=0.5 → Rocky's confidence is higher → **adopt**
+- Grace sets `"fire" → {"symbol": "✦", "confidence": 0.7}`
 
-### Round N+2 — Alignment check
-
-Both now agree: `{"moon": "✦", "fire": "☆"}`
-
-The conflict took 2 extra rounds to resolve — one to break the collision, one to re-establish the lost mapping.
+Result: the higher-confidence mapping wins. No flip-flopping.
 
 ---
 
-## Scenario 3: Already aligned (early exit)
+## Scenario 3: Mutual exclusivity prevents collisions
 
-Starting state: both agents happen to agree on everything already.
+Starting state: Grace has `"star" → "○"` and Rocky has `"wind" → "○"` — same symbol, different meanings.
 
-### Trigger — Mission Control → Grace
+### Without mutual exclusivity (old behavior)
 
-Grace initializes lexicons. By chance (or test setup), they're identical:
-```
-grace_lex: {"apple": "✦", "dance": "≈", "river": "△"}
-rocky_lex: {"apple": "✦", "dance": "≈", "river": "△"}
-```
+Grace proposes "○" for `star`. Rocky adopts but loses `wind=○`. Extra round needed to re-coin wind.
 
-Grace checks alignment → `1.0` immediately.
+### With mutual exclusivity (this branch)
 
-**Grace responds (no call to Rocky at all):**
+Grace's `coin_exclusive()` sees "○" is already in Rocky's lexicon. Instead of proposing "○", she coins a fresh symbol "☆" that's free in both lexicons.
+
+**Grace → Rocky:**
 ```json
 {
-  "message": {
-    "parts": [{"text": "done | rounds: 0 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', 'river': '△'} | rocky: {'apple': '✦', 'dance': '≈', 'river': '△'}"}],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-        "round": 0
-      }
-    }
+  "metadata": {
+    "https://example.com/ext/emergent-lang/v1/proposals": [
+      {"referent": "star", "symbol": "☆", "confidence": 0.5}
+    ]
   }
 }
 ```
 
-Zero rounds. Zero network calls. Game was already won at initialization.
+Rocky adopts "☆" for star. His `wind=○` mapping is untouched. Zero collision rounds.
 
 ---
 
-## Scenario 4: Max rounds (timeout)
+## Scenario 4: Full 10-meaning convergence
 
-Starting state: agents keep coining new symbols instead of adopting (hypothetical — our implementation always adopts, but this shows the safety net).
+Starting state: 10 meanings, all different between agents. All confidence = 0.5 (freshly coined).
 
-After 60 rounds of ping-pong with no convergence:
+### Round 1 — Grace batch-proposes all 10
+
+Grace sends 10 proposals. Rocky receives all 10 with confidence 0.5.
+Rocky's confidence for each is also 0.5 → equal confidence → adopts all 10.
+
+Rocky checks alignment → 1.0 → **DONE**.
 
 ```json
 {
   "message": {
-    "parts": [{"text": "done | rounds: 60 | alignment: 40% | grace: {...} | rocky: {...}"}],
+    "parts": [{"text": "done | rounds: 1 | alignment: 100% | grace: {...} | rocky: {...}"}]
+  }
+}
+```
+
+**10 meanings converged in 1 round.** Batch proposals + equal confidence = instant convergence.
+
+---
+
+## Scenario 5: Max rounds (timeout)
+
+After 60 rounds with persistent confidence deadlocks:
+
+```json
+{
+  "message": {
+    "parts": [{"text": "done | rounds: 60 | alignment: 80% | grace: {...} | rocky: {...}"}],
     "metadata": {
       "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", ...},
-        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "○", "sea": "◆", ...},
+        "grace_lex": {"apple": {"symbol": "✦", "confidence": 1.0}, ...},
+        "rocky_lex": {"apple": {"symbol": "✦", "confidence": 1.0}, ...},
         "round": 60
       }
     }
@@ -195,7 +183,7 @@ After 60 rounds of ping-pong with no convergence:
 }
 ```
 
-Game stops at round 60 regardless. Partial alignment reported. This prevents infinite ping-pong.
+Game stops at round 60. In practice, smart convergence resolves in 1-5 rounds.
 
 ---
 
@@ -203,7 +191,8 @@ Game stops at round 60 regardless. Partial alignment reported. This prevents inf
 
 | Scenario | Rounds | What happens |
 |----------|--------|-------------|
-| Clean agreement | N meanings = N rounds | Each round resolves one disagreement |
-| Symbol conflict | +2 extra rounds per conflict | Adopt breaks collision, then re-coin the lost meaning |
-| Already aligned | 0 rounds | Grace detects 1.0 immediately, responds without calling Rocky |
-| Timeout | 60 (max) | Game stops, reports partial alignment |
+| Batch agreement (equal confidence) | 1 round | All meanings resolved in one batch |
+| Confidence yielding | 2-3 rounds | Lower confidence yields, higher wins |
+| Mutual exclusivity | 0 extra rounds | No symbol collisions ever occur |
+| Full 10-meaning game | 1-5 rounds | Batch + confidence = fast convergence |
+| Timeout | 60 (max) | Safety net — rarely hit with smart convergence |

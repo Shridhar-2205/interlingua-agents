@@ -1,10 +1,15 @@
 """Rocky — stateless A2A ping-pong agent.
 
 No state is stored in memory. All game state (both lexicons, round number,
-current referent) travels in A2A message metadata. Each call to execute()
-reads state from the incoming message, does one step, and either responds
-(game over) or calls Grace with updated state. When the function returns,
-all local variables are gone — the only surviving state is in the message.
+proposals) travels in A2A message metadata. Each call to execute() reads
+state from the incoming message, does one step, and either responds (game
+over) or calls Grace with updated state. When the function returns, all
+local variables are gone — the only surviving state is in the message.
+
+Smart convergence features:
+  - Mutual exclusivity: coin_exclusive() never picks a conflicting symbol
+  - Batch proposals: all disagreements proposed in one round
+  - Confidence scores: lower-confidence agent yields, prevents flip-flopping
 """
 from __future__ import annotations
 
@@ -19,8 +24,8 @@ from a2a.client import ClientConfig, create_client
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.request_handlers import DefaultRequestHandler
-from a2a.server.routes.agent_card_routes import create_agent_card_routes  # serves GET /.well-known/agent.json
-from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes        # serves POST / (JSON-RPC endpoint)
+from a2a.server.routes.agent_card_routes import create_agent_card_routes
+from a2a.server.routes.jsonrpc_routes import create_jsonrpc_routes
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import (
     AgentCapabilities, AgentCard, AgentExtension, AgentSkill,
@@ -29,15 +34,17 @@ from a2a.types import (
 from a2a.types.a2a_pb2 import AgentInterface
 from google.protobuf.json_format import MessageToDict
 
-from signaling import MEANINGS, adopt, alignment, coin
+from signaling import (
+    MEANINGS, alignment, propose_batch, resolve_batch, get_symbol,
+)
 
 # A2A extension URI — metadata keys are namespaced under this
 EXT = "https://example.com/ext/emergent-lang/v1"
-CONTEXT = f"{EXT}/context"  # carries: grace_lex, rocky_lex, round, referent
-MESSAGE = f"{EXT}/message"  # carries: the symbol being proposed
+CONTEXT = f"{EXT}/context"      # carries: grace_lex, rocky_lex, round
+PROPOSALS = f"{EXT}/proposals"  # carries: list of {referent, symbol, confidence}
 
-GRACE_URL = "http://localhost:9101"  # Grace's A2A endpoint
-MAX_ROUNDS = 60  # safety net — stop even if not converged
+GRACE_URL = "http://localhost:9101"
+MAX_ROUNDS = 60
 
 
 class RockyExecutor(AgentExecutor):
@@ -45,31 +52,29 @@ class RockyExecutor(AgentExecutor):
 
     State flow:
       1. Read game state from incoming A2A metadata
-      2. Do one step (adopt incoming signal, then coin a new one)
-      3. Either respond (done) or call Grace with updated state in metadata
-      4. All local variables are discarded when this function returns
+      2. Resolve incoming proposals (if any) using confidence-based yielding
+      3. Check alignment — stop if converged
+      4. Generate batch proposals for all remaining disagreements
+      5. Send to Grace via A2A — all state in metadata, nothing in memory
     """
 
     @override
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        # Read state from incoming A2A metadata — this is the ONLY source of truth
+        # Read state from incoming A2A metadata — the ONLY source of truth
         md = context.metadata or {}
         ctx = md.get(CONTEXT) or {}
         grace_lex = dict(ctx.get("grace_lex", {}))
         rocky_lex = dict(ctx.get("rocky_lex", {}))
-        rnd = int(ctx.get("round", 0))  # int() because JSON numbers deserialize as float
-        referent = ctx.get("referent")
-        signal = md.get(MESSAGE)
+        rnd = int(ctx.get("round", 0))
 
-        # Adopt Grace's signal — update Rocky's lexicon to match
-        if signal:
-            adopt(rocky_lex, referent, signal)
+        # Process Grace's proposals — confidence determines who yields
+        proposals = md.get(PROPOSALS, [])
+        if proposals:
+            rocky_lex = resolve_batch(rocky_lex, proposals)
 
         # Stop condition: all 10 meanings agree, or max rounds reached
         score = alignment(grace_lex, rocky_lex)
         if score == 1.0 or rnd >= MAX_ROUNDS:
-            # Game over — respond directly, do NOT call Grace
-            # Response unwinds back through the call chain to Mission Control
             summary = f"done | rounds: {rnd} | alignment: {score:.0%} | grace: {grace_lex} | rocky: {rocky_lex}"
             print(summary)
             reply = Message(
@@ -84,13 +89,10 @@ class RockyExecutor(AgentExecutor):
             await event_queue.enqueue_event(reply)
             return
 
-        # Rocky speaks — pick a disagreement and coin/reuse a symbol
-        unresolved = [m for m in MEANINGS if grace_lex.get(m) != rocky_lex.get(m)]
-        referent = unresolved[rnd % len(unresolved)] if unresolved else MEANINGS[0]
-        sym = rocky_lex.get(referent) or coin(rocky_lex, grace_lex)
-        rocky_lex[referent] = sym
+        # Batch propose — all disagreements at once, with confidence
+        proposals = propose_batch(rocky_lex, grace_lex)
 
-        # Send to Grace via A2A — full game state in metadata, no memory kept
+        # Send to Grace via A2A — full state in metadata, nothing stored in memory
         grace = await create_client(GRACE_URL, ClientConfig(streaming=False))
         req = SendMessageRequest(
             message=Message(
@@ -98,13 +100,12 @@ class RockyExecutor(AgentExecutor):
                 parts=[Part(text="signal")], extensions=[EXT],
             ),
         )
-        # All state goes into metadata — nothing stored in memory
         req.metadata.update({
-            CONTEXT: {"grace_lex": grace_lex, "rocky_lex": rocky_lex, "round": rnd + 1, "referent": referent},
-            MESSAGE: sym,
+            CONTEXT: {"grace_lex": grace_lex, "rocky_lex": rocky_lex, "round": rnd + 1},
+            PROPOSALS: proposals,
         })
 
-        # Wait for Grace's response (she may ping-pong back to us before responding)
+        # Wait for Grace's response (she may ping-pong back before responding)
         result_text = ""
         result_metadata = {}
         async for ev in grace.send_message(req):
@@ -112,7 +113,7 @@ class RockyExecutor(AgentExecutor):
                 result_text = ev.message.parts[0].text if ev.message.parts else ""
                 result_metadata = MessageToDict(ev.message.metadata) if ev.message.metadata.ByteSize() else {}
 
-        # Pass through Grace's response back to whoever called us
+        # Pass through Grace's response back to caller
         reply = Message(
             message_id=uuid4().hex,
             context_id=context.context_id or "",
@@ -132,11 +133,11 @@ class RockyExecutor(AgentExecutor):
 def build_agent_card(host: str = "localhost", port: int = 9102) -> AgentCard:
     """Agent Card — served at GET /.well-known/agent.json for A2A discovery."""
     ext = AgentExtension(uri=EXT, description="Game state via extension.", required=True)
-    ext.params.update({"keys": ["context", "message"]})
+    ext.params.update({"keys": ["context", "proposals"]})
     return AgentCard(
         name="Rocky",
         description="Stateless ping-pong signaling game peer (the Eridian).",
-        version="2.0.0",
+        version="3.0.0",
         supported_interfaces=[
             AgentInterface(url=f"http://{host}:{port}/", protocol_binding="JSONRPC"),
         ],
@@ -145,7 +146,7 @@ def build_agent_card(host: str = "localhost", port: int = 9102) -> AgentCard:
         capabilities=AgentCapabilities(streaming=False, extensions=[ext]),
         skills=[AgentSkill(
             id="signal", name="Signaling game",
-            description="Stateless ping-pong: one step per call.", tags=["emergent"],
+            description="Stateless ping-pong: batch proposals + confidence.", tags=["emergent"],
         )],
     )
 
@@ -153,7 +154,6 @@ def build_agent_card(host: str = "localhost", port: int = 9102) -> AgentCard:
 def main() -> None:
     host, port = "localhost", 9102
     card = build_agent_card(host, port)
-    # A2A server setup — routes for agent card discovery + JSON-RPC message handling
     handler = DefaultRequestHandler(
         agent_executor=RockyExecutor(), task_store=InMemoryTaskStore(), agent_card=card,
     )
