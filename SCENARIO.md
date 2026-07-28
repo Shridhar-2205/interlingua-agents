@@ -1,10 +1,17 @@
-# Scenarios — A2A Message Passing
+# Scenarios — A2A Message Passing (Theory of Mind)
 
-## Scenario 1: Agreement (convergence in 3 rounds)
+## Scenario 1: ToM-guided convergence
 
-Starting state: 3 meanings, agents disagree on all.
+Starting state: 3 meanings, agents disagree on all. Theory of Mind predicts acceptance before proposing.
 
-### Round 1 — Grace speaks, Rocky listens
+### Round 1 — Grace predicts + proposes
+
+Grace evaluates all unresolved meanings:
+- `apple`: Grace has "✦", Rocky has "○". Predict: 0.5 (different, no conflict)
+- `dance`: Grace has "≈", Rocky has "◆". Predict: 0.5
+- `river`: Grace has "△", Rocky has "▽". Predict: 0.5
+
+All equal — picks `apple` with her symbol "✦".
 
 **Grace → Rocky:**
 ```json
@@ -14,14 +21,25 @@ Starting state: 3 meanings, agents disagree on all.
       "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
       "rocky_lex": {"apple": "○", "dance": "◆", "river": "▽"},
       "round": 1,
-      "referent": "apple"
+      "history": []
     },
-    "https://example.com/ext/emergent-lang/v1/message": "✦"
+    "https://example.com/ext/emergent-lang/v1/message": "✦",
+    "https://example.com/ext/emergent-lang/v1/referent": "apple"
   }
 }
 ```
 
-Rocky adopts: `"apple" → "✦"` (was "○")
+Rocky runs `decide_accept`: no established conflict → **accepts**.
+Rocky runs `adopt(rocky_lex, "apple", "✦")`.
+History updated: `[{"referent": "apple", "symbol": "✦", "accepted": true, "speaker": "grace"}]`
+
+### Round 2 — Rocky predicts + proposes
+
+Rocky evaluates unresolved: `dance`, `river`.
+- `dance`: Rocky has "◆", Grace has "≈". Predict: 0.5
+- `river`: Rocky has "▽", Grace has "△". Predict: 0.5
+
+Picks `dance` with "◆".
 
 **Rocky → Grace:**
 ```json
@@ -31,39 +49,22 @@ Rocky adopts: `"apple" → "✦"` (was "○")
       "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
       "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
       "round": 2,
-      "referent": "dance"
+      "history": [{"referent": "apple", "symbol": "✦", "accepted": true, "speaker": "grace"}]
     },
-    "https://example.com/ext/emergent-lang/v1/message": "◆"
+    "https://example.com/ext/emergent-lang/v1/message": "◆",
+    "https://example.com/ext/emergent-lang/v1/referent": "dance"
   }
 }
 ```
 
-Grace adopts: `"dance" → "◆"` (was "≈")
+Grace: `decide_accept` → accepts. Adopts "◆" for dance.
 
-### Round 2 — Grace speaks, Rocky listens
+### Round 3 — Grace proposes river
 
-**Grace → Rocky:**
-```json
-{
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-      "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
-      "round": 3,
-      "referent": "river"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "△"
-  }
-}
-```
+Only `river` remains unresolved. Grace proposes "△".
 
-Rocky adopts: `"river" → "△"` (was "▽")
+Rocky accepts. Alignment = 1.0 → **DONE**.
 
-### Round 3 — Alignment check → DONE
-
-Rocky checks: `alignment == 1.0` (all 3 meanings match)
-
-**Rocky responds (no further call):**
 ```json
 {
   "message": {
@@ -72,22 +73,28 @@ Rocky checks: `alignment == 1.0` (all 3 meanings match)
       "https://example.com/ext/emergent-lang/v1/context": {
         "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
         "rocky_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-        "round": 3
+        "round": 3,
+        "history": [
+          {"referent": "apple", "symbol": "✦", "accepted": true, "speaker": "grace"},
+          {"referent": "dance", "symbol": "◆", "accepted": true, "speaker": "rocky"},
+          {"referent": "river", "symbol": "△", "accepted": true, "speaker": "grace"}
+        ]
       }
     }
   }
 }
 ```
 
-Response unwinds back to Mission Control. Game over.
-
 ---
 
-## Scenario 2: Disagreement (conflict resolution)
+## Scenario 2: Rejection + History avoids repeated failure
 
-Starting state: Rocky has `"fire" → "✦"` and Grace has `"moon" → "✦"` — same symbol, different meanings. This is a **conflict**.
+Starting state: Rocky has `"fire" → "✦"` established (accepted in history). Grace proposes "✦" for `moon`.
 
-### Round N — Grace speaks "moon = ✦"
+### Round N — Grace proposes "moon = ✦"
+
+Grace predicts: "✦" is in Rocky's lexicon for `fire` → score 0.3 (symbol taken).
+But it's the best she has — sends it anyway.
 
 **Grace → Rocky:**
 ```json
@@ -97,105 +104,99 @@ Starting state: Rocky has `"fire" → "✦"` and Grace has `"moon" → "✦"` �
       "grace_lex": {"moon": "✦", "fire": "○"},
       "rocky_lex": {"moon": "◆", "fire": "✦"},
       "round": 5,
-      "referent": "moon"
+      "history": [
+        {"referent": "fire", "symbol": "✦", "accepted": true, "speaker": "rocky"}
+      ]
     },
-    "https://example.com/ext/emergent-lang/v1/message": "✦"
+    "https://example.com/ext/emergent-lang/v1/message": "✦",
+    "https://example.com/ext/emergent-lang/v1/referent": "moon"
   }
 }
 ```
 
-Rocky runs `adopt(rocky_lex, "moon", "✦")`:
-1. Finds conflict: `"fire"` also maps to `"✦"`
-2. Removes the conflicting mapping: `del rocky_lex["fire"]`
-3. Sets: `rocky_lex["moon"] = "✦"`
+Rocky runs `decide_accept`:
+- "✦" maps to `fire` in his lexicon
+- History shows `fire=✦` was previously accepted → **established**
+- **Rejects** to protect the established mapping.
 
-Rocky's lexicon is now: `{"moon": "✦"}` — he lost "fire" entirely.
+History updated: `[..., {"referent": "moon", "symbol": "✦", "accepted": false, "speaker": "grace"}]`
 
-### Round N+1 — Rocky re-coins "fire"
+### Round N+1 — Grace retries with ToM
 
-Rocky sees `"fire"` is unresolved (Grace has it, Rocky doesn't). He coins a fresh symbol.
+Grace's `propose_with_tom` checks `predict_acceptance("moon", "✦", rocky_lex, history)`:
+- Finds the rejection in history → score **0.0**
+- Coins a new symbol via `coin_smart` (avoids "✦" and all rejected symbols)
+- Gets "☆" → predict score 0.5
 
-**Rocky → Grace:**
+**Grace → Rocky:**
 ```json
 {
   "metadata": {
     "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"moon": "✦", "fire": "○"},
-      "rocky_lex": {"moon": "✦", "fire": "☆"},
+      "grace_lex": {"moon": "☆", "fire": "○"},
+      "rocky_lex": {"moon": "◆", "fire": "✦"},
       "round": 6,
-      "referent": "fire"
+      "history": [
+        {"referent": "fire", "symbol": "✦", "accepted": true, "speaker": "rocky"},
+        {"referent": "moon", "symbol": "✦", "accepted": false, "speaker": "grace"}
+      ]
     },
-    "https://example.com/ext/emergent-lang/v1/message": "☆"
+    "https://example.com/ext/emergent-lang/v1/message": "☆",
+    "https://example.com/ext/emergent-lang/v1/referent": "moon"
   }
 }
 ```
 
-Grace adopts: `"fire" → "☆"` (was "○")
+Rocky: "☆" doesn't conflict with anything → **accepts**.
 
-### Round N+2 — Alignment check
-
-Both now agree: `{"moon": "✦", "fire": "☆"}`
-
-The conflict took 2 extra rounds to resolve — one to break the collision, one to re-establish the lost mapping.
+History learned from the rejection and avoided repeating it.
 
 ---
 
-## Scenario 3: Already aligned (early exit)
+## Scenario 3: Prediction avoids conflict entirely
 
-Starting state: both agents happen to agree on everything already.
+Starting state: Grace has `"star" → "○"`, Rocky has `"wind" → "○"`. Without ToM, Grace might propose "○" for `star` causing a collision.
 
-### Trigger — Mission Control → Grace
+### Grace's ToM evaluation
 
-Grace initializes lexicons. By chance (or test setup), they're identical:
 ```
-grace_lex: {"apple": "✦", "dance": "≈", "river": "△"}
-rocky_lex: {"apple": "✦", "dance": "≈", "river": "△"}
-```
+predict_acceptance("star", "○", rocky_lex, history):
+  → "○" is already mapped to "wind" in Rocky's lexicon
+  → Score: 0.3 (symbol taken — likely reject)
 
-Grace checks alignment → `1.0` immediately.
-
-**Grace responds (no call to Rocky at all):**
-```json
-{
-  "message": {
-    "parts": [{"text": "done | rounds: 0 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', 'river': '△'} | rocky: {'apple': '✦', 'dance': '≈', 'river': '△'}"}],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-        "round": 0
-      }
-    }
-  }
-}
+predict_acceptance("star", "☆", rocky_lex, history):
+  → "☆" not in Rocky's lexicon
+  → Score: 1.0 (no mapping — will definitely accept)
 ```
 
-Zero rounds. Zero network calls. Game was already won at initialization.
+Grace coins "☆" instead of sending "○". Rocky accepts immediately.
+
+**Without ToM**: Grace sends "○" → Rocky adopts but loses `wind=○` → extra round to re-coin wind.
+**With ToM**: Grace avoids the conflict entirely → saves 2 rounds.
 
 ---
 
 ## Scenario 4: Max rounds (timeout)
 
-Starting state: agents keep coining new symbols instead of adopting (hypothetical — our implementation always adopts, but this shows the safety net).
-
-After 60 rounds of ping-pong with no convergence:
+After 60 rounds with persistent disagreements:
 
 ```json
 {
   "message": {
-    "parts": [{"text": "done | rounds: 60 | alignment: 40% | grace: {...} | rocky: {...}"}],
+    "parts": [{"text": "done | rounds: 60 | alignment: 70% | grace: {...} | rocky: {...}"}],
     "metadata": {
       "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", ...},
-        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "○", "sea": "◆", ...},
-        "round": 60
+        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", ...},
+        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "○", ...},
+        "round": 60,
+        "history": [...]
       }
     }
   }
 }
 ```
 
-Game stops at round 60 regardless. Partial alignment reported. This prevents infinite ping-pong.
+Game stops at round 60. History shows which proposals failed and why.
 
 ---
 
@@ -203,7 +204,7 @@ Game stops at round 60 regardless. Partial alignment reported. This prevents inf
 
 | Scenario | Rounds | What happens |
 |----------|--------|-------------|
-| Clean agreement | N meanings = N rounds | Each round resolves one disagreement |
-| Symbol conflict | +2 extra rounds per conflict | Adopt breaks collision, then re-coin the lost meaning |
-| Already aligned | 0 rounds | Grace detects 1.0 immediately, responds without calling Rocky |
-| Timeout | 60 (max) | Game stops, reports partial alignment |
+| ToM-guided agreement | ~N rounds for N meanings | Predicts acceptance, avoids bad proposals |
+| Rejection + history | +1 round per rejection | Learns from failure, never repeats |
+| Conflict avoidance | 0 extra rounds | ToM predicts low acceptance, coins alternative |
+| Timeout | 60 (max) | Game stops, full history preserved in metadata |
