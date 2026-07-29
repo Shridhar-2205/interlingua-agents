@@ -31,26 +31,52 @@ bone, stick, shell, feather, fur, smoke, ice, lightning, shadow, star
 The human knows them by English names. The alien perceives them by description
 (e.g. "the hot bright dancing thing" for fire) and invents its own Zyphorian words.
 
+## How state travels (A2A data part)
+
+Conversation history is passed as a **JSON data part** in every A2A message.
+Each `Part` carries `data` (a protobuf `Value` with JSON-serialized history) plus
+`media_type: "application/json"`. This means:
+
+- **Both agents are fully stateless** — they reconstruct conversation history
+  from the data part on each incoming request.
+- The human starts fresh if no history is provided (initial trigger), otherwise
+  resumes from the history in the data part.
+- Both agents return their updated history as a data part in every response.
+
+```
+Message.parts = [
+    Part(text="Vrk! [points at fire]"),                      # the utterance
+    Part(data=Value(string_value=json.dumps(history)),       # full LLM history
+         media_type="application/json"),
+]
+```
+
 ## Results
 
-In our test run, the agents aligned on **10 mappings in 14 exchanges**:
+In our test run, the agents aligned on **10 mappings in 19 exchanges** (with 3+
+confirmation requirement per word):
 
 | English | Alien |
 |---------|-------|
 | fire | vrk |
-| water | oosha |
-| rock | felk |
-| sun | draak-zul |
-| tree | morra-plix |
-| leaf | thiip |
-| moon | qip-norra |
-| stick | zrik |
-| bird | tii-draak |
-| mountain | felk-thaan |
+| water | zul |
+| rock | draak |
+| tree | morra |
+| leaf | plix |
+| bird | oosha |
+| sun | qip-thaan |
+| seed | felk |
+| insect | qip |
+| moon | nuu-thaan |
 
-The first few exchanges were gesture-heavy warmup (pointing, nodding, establishing
-that nodding = agreement). Then they hit a stride of ~1 new word per exchange, with
-a couple of social bonding rounds mixed in before the human declared completion.
+The alien language developed internal structure — compound words like `qip-thaan`
+(sun) and `nuu-thaan` (moon) share a `-thaan` suffix for celestial objects. The
+human agent tested these compound hypotheses during conversation ("Zul-draak?" for
+river, "Nuu-oosha?" for cloud) showing genuine linguistic reasoning.
+
+The human requires each word to be confirmed 3+ times before counting it as a
+trusted mapping, which forces the agents to revisit and re-confirm earlier words
+rather than rushing through new ones.
 
 ## Setup
 
@@ -140,11 +166,14 @@ Watch the human agent's terminal for the live conversation and final mappings.
 ```
 ┌─────────────────┐         A2A/HTTP          ┌─────────────────┐
 │  Human Agent    │◄────────────────────────►  │  Alien Agent    │
-│  :9201          │   SendMessage/response     │  :9202          │
+│  :9201          │  text + data (history)     │  :9202          │
 │                 │                            │                 │
 │  Persona: EN    │                            │  Persona: ZYP   │
 │  LLM: inline    │                            │  LLM: inline    │
 │  Drives loop    │                            │  Responds only  │
+│  Stateless      │                            │  Stateless      │
+│  (history from data part)                    │  (history from  │
+│                 │                            │   data part)    │
 └─────────────────┘                            └─────────────────┘
         ▲
         │ trigger (curl / A2A client)
@@ -152,7 +181,8 @@ Watch the human agent's terminal for the live conversation and final mappings.
    External caller
 ```
 
-Both agents maintain their own conversation history for LLM context.
-The alien's language stays consistent because its full history is passed
-to the LLM on every turn. No shared state, no external coordination —
-just two agents talking over HTTP until they converge.
+Each A2A message carries two parts: a text part (the utterance) and a data part
+(the full LLM conversation history as JSON). Both agents are stateless — they
+rebuild context from the incoming data part on every request. No shared state,
+no external coordination — just two agents talking over HTTP with history on the
+wire until they converge on 10 word mappings.

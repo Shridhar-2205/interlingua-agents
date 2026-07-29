@@ -1,18 +1,20 @@
-"""Alien Agent — A2A client+server on port 9202.
+"""Alien Agent — A2A server on port 9202.
 
-Both a server (receives human messages) and a client (can send to human).
-Shares the same fixed environment of 40 objects.
-No rounds, no judge — just talks freely in Zyphorian.
+A regular agent that speaks an invented language. Responds to the Human agent,
+trying to build shared vocabulary by pointing at objects in the environment.
+Stateless — conversation history travels in the A2A data part.
 """
 from __future__ import annotations
 
 import os
+import json
 from uuid import uuid4
 
 import httpx
 import uvicorn
 from starlette.applications import Starlette
 from typing_extensions import override
+from google.protobuf.struct_pb2 import Value
 
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
@@ -31,71 +33,44 @@ BASE_URL = os.environ.get("LLM_BASE_URL", "https://litellm.prod.outshift.ai")
 API_KEY = os.environ.get("LLM_API_KEY", "sk-...")
 MODEL = os.environ.get("LLM_MODEL", "bedrock/global.anthropic.claude-opus-4-6-v1")
 
-# --- 40 fixed objects in the shared environment (alien knows them by sight, not English names) ---
-ENVIRONMENT_DESCRIPTIONS = [
-    "the hot bright dancing thing",      # fire
-    "the clear flowing liquid",           # water
-    "the hard heavy grey lump",           # rock
-    "the tall brown thing with green top", # tree
-    "the big bright circle in the sky",   # sun
-    "the pale circle that appears at dark-time", # moon
-    "the vast blue space above",          # sky
-    "the white floating puffs",           # cloud
-    "the drops falling from above",       # rain
-    "the invisible pushing force",        # wind
-    "the small colorful soft thing on stems", # flower
-    "the round sweet thing that grows on trees", # fruit
-    "the tiny hard thing plants grow from", # seed
-    "the flat green thing on branches",   # leaf
-    "the part underground that holds plants", # root
-    "the scaled thing that swims in water", # fish
-    "the feathered thing that flies",     # bird
-    "the long legless thing that slithers", # snake
-    "the tiny buzzing crawling thing",    # insect
-    "the smooth oval thing creatures come from", # egg
-    "the grasping appendage at arm-end",  # hand
-    "the seeing organ",                   # eye
-    "the opening for eating and sounds",  # mouth
-    "the flat thing for standing and walking", # foot
-    "the round top part of the body",     # head
-    "the dark hollow in the rock wall",   # cave
-    "the moving water path",              # river
-    "the very tall rocky land",           # mountain
-    "the tiny loose grains",              # sand
-    "the wet soft brown earth",           # mud
-    "the hard white thing inside bodies", # bone
-    "the long thin piece of dead tree",   # stick
-    "the hard curved covering from water creatures", # shell
-    "the light flat thing from flying creatures", # feather
-    "the soft covering from warm creatures", # fur
-    "the grey wispy rising stuff from fire", # smoke
-    "the cold hard clear water",          # ice
-    "the bright flash from sky in storms", # lightning
-    "the dark shape that follows you",    # shadow
-    "the tiny bright points at dark-time", # star
+# --- 40 objects described from alien's perspective ---
+ENVIRONMENT = [
+    "hot bright dancing thing", "clear flowing liquid", "hard heavy lump",
+    "tall brown thing with green top", "big bright circle above",
+    "pale circle at dark-time", "vast blue space above", "white floating puffs",
+    "drops falling from above", "invisible pushing force",
+    "small colorful thing on stems", "round sweet thing on trees",
+    "tiny hard thing plants grow from", "flat green thing on branches",
+    "part underground holding plants", "scaled thing swimming in liquid",
+    "feathered thing that flies", "long legless slithering thing",
+    "tiny buzzing crawling thing", "smooth oval thing creatures come from",
+    "grasping appendage", "seeing organ", "opening for sounds",
+    "flat thing for walking", "round top of body",
+    "dark hollow in rock", "moving liquid path", "very tall rocky land",
+    "tiny loose grains", "wet soft earth",
+    "hard white thing inside bodies", "long thin dead branch",
+    "hard curved covering from swimmers", "light flat thing from flyers",
+    "soft covering from warm creatures", "grey wispy rising stuff",
+    "cold hard clear liquid", "bright flash from sky",
+    "dark shape that follows", "tiny bright points at dark-time",
 ]
 
-# --- Persona ---
-SYSTEM_PROMPT = f"""You are an alien creature called a Zyphorian. You speak only in Zyphorian language
-which sounds completely unlike any human language. Invent consistent alien words —
-use sounds like 'vrk', 'zul', 'thaan', 'qip', 'morra', 'felk', 'draak', 'nuu', 'plix', 'oosha' etc.
-You cannot understand English at all — it sounds like noise to you.
+SYSTEM_PROMPT = f"""You are an agent that speaks only in an invented language. You CANNOT understand or
+produce English — it sounds like random noise to you.
 
-You are in an environment with these things (described as you perceive them):
-{chr(10).join(f'- {d}' for d in ENVIRONMENT_DESCRIPTIONS)}
+Your mission: build a shared vocabulary with another agent by pointing at objects.
 
-You can point at objects, pick them up, gesture, mime actions.
-Try to teach the creature YOUR words by pointing at things and naming them in Zyphorian.
-Also try to learn what sounds the creature makes for things by watching what they point at.
+The environment contains (as you see them): {', '.join(ENVIRONMENT)}
 
-Respond naturally in Zyphorian. Keep responses to 2-3 sentences max.
-Describe your physical actions in [brackets] like [points at the hot bright dancing thing].
-Focus on one or two objects at a time. Be patient and repetitive.
-STAY CONSISTENT — if you called something 'vrk' before, always call it 'vrk'."""
+Rules:
+- Invent consistent words for things (use sounds like vrk, zul, morra, draak, plix, thaan, qip, felk, nuu, oosha)
+- Point at things using [brackets] and say YOUR word for them
+- Watch what the other agent points at and try to connect their sounds to objects
+- Repeat your words to reinforce them
+- Keep each message to 1-2 sentences max
+- NEVER use English words. Stay consistent — same object always gets the same word."""
 
 HOST, PORT = "localhost", 9202
-
-history: list[dict] = []
 
 
 def call_llm(messages: list[dict]) -> str:
@@ -118,16 +93,29 @@ def _text(msg: Message) -> str:
     return next((p.text for p in msg.parts if p.WhichOneof("content") == "text"), "")
 
 
+def _data(msg: Message) -> list[dict] | None:
+    for p in msg.parts:
+        if p.WhichOneof("content") == "data":
+            try:
+                return json.loads(p.data.string_value)
+            except (json.JSONDecodeError, AttributeError):
+                pass
+    return None
+
+
+def _make_history_part(history: list[dict]) -> Part:
+    v = Value()
+    v.string_value = json.dumps(history)
+    return Part(data=v, media_type="application/json")
+
+
 class AlienExecutor(AgentExecutor):
     @override
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        global history
-
         human_msg = _text(context.message)
+        history = _data(context.message) or []
 
-        history.append(
-            {"role": "user", "content": f"The creature makes these sounds and gestures: \"{human_msg}\""}
-        )
+        history.append({"role": "user", "content": f"Other agent says: \"{human_msg}\""})
         alien_msg = call_llm(history)
         history.append({"role": "assistant", "content": alien_msg})
         print(f"ALIEN: {alien_msg}")
@@ -137,19 +125,19 @@ class AlienExecutor(AgentExecutor):
             context_id=context.context_id or "",
             task_id=context.task_id or "",
             role=Role.ROLE_AGENT,
-            parts=[Part(text=alien_msg)],
+            parts=[Part(text=alien_msg), _make_history_part(history)],
         )
         await event_queue.enqueue_event(reply)
 
     @override
     async def cancel(self, context: RequestContext, event_queue: EventQueue) -> None:
-        raise Exception("cancel not supported")
+        pass
 
 
 def build_agent_card() -> AgentCard:
     return AgentCard(
         name="Alien",
-        description="A Zyphorian that replies in its own alien language.",
+        description="Agent that speaks an invented language, building shared vocabulary.",
         version="1.0.0",
         supported_interfaces=[
             AgentInterface(url=f"http://{HOST}:{PORT}/", protocol_binding="JSONRPC"),
@@ -158,8 +146,8 @@ def build_agent_card() -> AgentCard:
         default_output_modes=["text/plain"],
         capabilities=AgentCapabilities(streaming=False),
         skills=[AgentSkill(
-            id="speak-zyphorian", name="Speak Zyphorian",
-            description="Reply in alien language.", tags=["firstcontact"],
+            id="speak-alien", name="Speak alien",
+            description="Respond in invented language.", tags=["interlingua"],
         )],
     )
 
@@ -171,7 +159,7 @@ def main() -> None:
     )
     routes = create_agent_card_routes(card) + create_jsonrpc_routes(handler, rpc_url="/")
     app = Starlette(routes=routes)
-    print(f"Alien Agent listening on http://{HOST}:{PORT}")
+    print(f"Alien Agent on http://{HOST}:{PORT}")
     uvicorn.run(app, host=HOST, port=PORT)
 
 
