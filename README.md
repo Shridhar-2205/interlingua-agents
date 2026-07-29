@@ -2,49 +2,9 @@
 
 Inspired by the movie *Project Hail Mary*: an astronaut (Grace) and an alien (Rocky) build a shared language from scratch using A2A protocol. No shared memory — just two beings passing symbols back and forth until they understand each other.
 
-## Algorithm
-
-**Lewis Signaling Game** (from David Lewis, *Convention*, 1969):
-
-1. **Sender** observes a meaning (a state of the world the Receiver can't see)
-2. **Sender** picks an arbitrary signal (a symbol with no inherent meaning)
-3. **Receiver** sees the signal and guesses which state the world is in
-4. Both succeed only if the Receiver's guess matches reality
-
-No pre-existing language. The signals are arbitrary. But if both players want to coordinate, they converge on a stable mapping — each meaning gets a unique signal. Lewis called this a **signaling convention**: self-reinforcing because neither player benefits from deviating once established.
-
-Nobody sat down and decided "✦ means fire." It emerged from repeated successful coordination. Any consistent mapping works equally well — the one that sticks is arbitrary but stable.
-
-That's what Grace and Rocky do here: Grace proposes symbols for concepts, Rocky adopts them, rounds repeat until they share a dictionary neither designed but both follow.
-
-Our implementation targets disagreements first and exits early once fully aligned.
-
-### Implementation (`signaling.py`)
-
-Three primitives power the entire negotiation:
-
-| Primitive | What it does | Role in the game |
-|-----------|-------------|------------------|
-| `coin(mine, theirs)` | Pick a random symbol not yet used by either agent | **Innovation** — introduce a novel sign into the channel |
-| `adopt(lex, meaning, symbol)` | Accept the speaker's symbol for a meaning; remove any conflicting mappings | **Alignment** — convention spreads by imitation |
-| `alignment(a, b)` | Fraction of meanings where both agents agree on the same symbol | **Convergence check** — 1.0 means a fully shared language |
-
-The loop:
-
-1. Speaker picks a meaning that the two agents disagree on
-2. Speaker **coins** a symbol (or reuses one it already has)
-3. Listener **adopts** that symbol — overwrites its own mapping
-4. Measure **alignment** — if 1.0, stop; otherwise next round
-
-There is no reward signal, no gradient, no central dictionary. The language emerges purely from use and imitation — exactly the dynamic Lewis described in 1969.
-
-References:
-- Lewis, *Convention* (1969) — https://plato.stanford.edu/entries/convention/
-- Havrylov & Titov (NIPS 2017) — https://arxiv.org/abs/1705.11192
-
 ## Data Storage
 
-No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. The A2A message metadata **is** the memory. Every message carries the full game state:
+No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. A structured JSON **`data` Part** on the A2A message **is** the memory. State is NOT in the `text` Part (that's just a human-readable label like `"input"` or `"done | ..."`), and NOT in message metadata or extensions. Every message carries the full state in one `data` Part (see `emergent_state.py`):
 
 ```
 grace_lex   →  Grace's full dictionary       (e.g. {"fire": "✦", "river": "≈", ...})
@@ -54,9 +14,11 @@ referent    →  concept being discussed       (e.g. "river")
 message     →  symbol being proposed         (e.g. "≈")
 ```
 
-Each agent reads state from the incoming message, does one step, and writes updated state into the outgoing message. When the function returns, all local variables are gone — the only surviving copy of the game state is the message that was just sent.
+In `a2a-sdk==1.1.2` (protobuf schema) a `Part` is a oneof over `text | raw | url | data`, where `data` is a `google.protobuf.Value`, so JSON is carried inline. `encode(state)` builds the data Part; `decode(message)` pulls the dict back out of the first data Part.
 
-Kill either agent mid-game, restart it, and the next call still works — because everything the agent needs is in that call's metadata.
+Each agent reads state from the incoming message's data Part, does one step, and writes updated state into the outgoing message's data Part. When the function returns, all local variables are gone — the only surviving copy of the state is the message that was just sent.
+
+Kill either agent mid-session, restart it, and the next call still works — because everything the agent needs is in that call's data Part.
 
 ## A2A Ping-Pong Flow
 
@@ -80,21 +42,30 @@ Mission Control (curl) ──trigger──▶ Grace (:9101)
 Mission Control ◀──final result────────┘
 ```
 
-- **Mission Control → Grace**: one trigger, no game state (just `{"text": "start"}`)
-- **Grace ↔ Rocky**: agents call each other back and forth, each passing the full game state in metadata
+- **Mission Control → Grace**: one trigger, no state (just `{"text": "start"}`)
+- **Grace ↔ Rocky**: agents call each other back and forth, each passing the full state in a `data` Part
 - **Stop**: whichever agent sees `alignment == 1.0` or `round >= 60` just responds instead of calling the other — the response chain unwinds back to Mission Control
 
 Both agents are server AND client. No external loop driver needed.
 
-### Metadata Fields
+### State Fields (data Part)
 
-| Field | Meaning |
-|-------|---------|
-| `context.grace_lex` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
-| `context.rocky_lex` | Rocky's lexicon |
-| `context.round` | Current round number |
-| `context.referent` | The concept being discussed this round |
-| `message` | The symbol being proposed |
+All fields live in a single `data` Part's JSON object with a **fixed schema** —
+exactly these keys, nothing else. The schema is defined once as the `EmergentState`
+dataclass in `emergent_state.py`; `encode` rejects unknown keys (so typos can't
+pass silently) and `decode` validates back into a `EmergentState`.
+
+| Field | Type | Meaning |
+|-------|------|---------|
+| `grace_lex` | `dict[str, str]` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
+| `rocky_lex` | `dict[str, str]` | Rocky's lexicon |
+| `round` | `int` | Current round number (crosses the wire as a float via protobuf `Value`; cast to `int` on read) |
+| `referent` | `str \| None` | The concept being discussed this round; **omitted** on the terminal "done" message |
+| `message` | `str \| None` | The symbol being proposed; **omitted** on the terminal "done" message |
+
+`referent`/`message` are optional: when `None` they are left out of the payload
+entirely rather than serialized as `null`, so the terminal "done" message
+carries only `grace_lex`, `rocky_lex`, and `round`.
 
 ### Full A2A Message (Grace → Rocky)
 
@@ -107,17 +78,19 @@ Both agents are server AND client. No external loop driver needed.
     "message": {
       "messageId": "7c9e2b...",
       "role": "ROLE_USER",
-      "parts": [{"text": "signal"}],
       "extensions": ["https://example.com/ext/emergent-lang/v1"],
-      "metadata": {
-        "https://example.com/ext/emergent-lang/v1/context": {
-          "grace_lex": {"fire": "✦", "river": "≈", "moon": "○"},
-          "rocky_lex": {"fire": "○", "river": "△", "moon": "✦"},
-          "round": 3,
-          "referent": "river"
-        },
-        "https://example.com/ext/emergent-lang/v1/message": "≈"
-      }
+      "parts": [
+        {"text": "input"},
+        {
+          "data": {
+            "grace_lex": {"fire": "✦", "river": "≈", "moon": "○"},
+            "rocky_lex": {"fire": "○", "river": "△", "moon": "✦"},
+            "round": 3,
+            "referent": "river",
+            "message": "≈"
+          }
+        }
+      ]
     }
   }
 }
@@ -130,15 +103,17 @@ Both agents are server AND client. No external loop driver needed.
   "message": {
     "messageId": "b4a8d1...",
     "role": "ROLE_AGENT",
-    "parts": [{"text": "done | rounds: 10 | alignment: 100% | grace: {...} | rocky: {...}"}],
     "extensions": ["https://example.com/ext/emergent-lang/v1"],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"fire": "✦", "river": "≈", ...},
-        "rocky_lex": {"fire": "✦", "river": "≈", ...},
-        "round": 10
+    "parts": [
+      {"text": "done | rounds: 10 | alignment: 100% | grace: {...} | rocky: {...}"},
+      {
+        "data": {
+          "grace_lex": {"fire": "✦", "river": "≈", "...": "..."},
+          "rocky_lex": {"fire": "✦", "river": "≈", "...": "..."},
+          "round": 10
+        }
       }
-    }
+    ]
   }
 }
 ```
@@ -166,48 +141,61 @@ uvicorn.run(app, host="localhost", port=9101)
 
 ```python
 rocky = await create_client("http://localhost:9102", ClientConfig(streaming=False))
-req = SendMessageRequest(message=Message(..., extensions=[EXT]))
-req.metadata.update({CONTEXT: {...}, MESSAGE: sym})
+req = SendMessageRequest(message=Message(
+    ...,
+    parts=[Part(text="input"), encode(EmergentState(...))],
+    extensions=[EXT],
+))
 
 async for ev in rocky.send_message(req):
-    # ev.message — the A2A response (parts, metadata, extensions)
+    # ev.message — the A2A response (parts, extensions)
 ```
 
 `create_client(url)` discovers the agent card, then sends `SendMessage` as JSON-RPC POST.
 
 ### Message Passing
 
-Game state travels in A2A extension metadata on every message:
+State travels in a structured JSON `data` Part on every message, with a
+fixed schema (`EmergentState`) enforced by the helpers in `emergent_state.py`:
 
 ```python
-# Outgoing (client writes)
-req.metadata.update({
-    "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {...}, "rocky_lex": {...}, "round": 3, "referent": "river"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "≈",
-})
+# Outgoing (client writes) — one text Part + one state data Part
+req = SendMessageRequest(message=Message(
+    message_id=uuid4().hex, role=Role.ROLE_USER, extensions=[EXT],
+    parts=[
+        Part(text="input"),
+        encode(EmergentState(
+            grace_lex={...}, rocky_lex={...},
+            round=3, referent="river", message="≈",
+        )),
+    ],
+))
 
-# Incoming (server reads)
-md = context.metadata or {}
-ctx = md.get(CONTEXT) or {}
-grace_lex = ctx.get("grace_lex", {})
-signal = md.get(MESSAGE)
+# Incoming (server reads) — validated back into an EmergentState (attribute access)
+state = decode(context.message)   # -> EmergentState
+grace_lex = state.grace_lex
+signal = state.message                # None on the terminal "done" message
 ```
 
-No shared memory, no database — just A2A messages carrying state back and forth over HTTP.
+No shared memory, no database — just A2A messages carrying state in a `data` Part back and forth over HTTP. The `text` Part is cosmetic (human-readable labels like `"input"` or `"done | ..."`); agents never parse it for state. Extensions/metadata advertise capabilities but carry zero state.
 
 ## Run
 
 ```bash
 pip install -r requirements.txt
 
-# Start both agents (separate terminals)
+# Start both agents (single command, backgrounds Rocky)
+python rocky_agent.py & python grace_agent.py
+```
+
+Or in separate terminals:
+
+```bash
 python rocky_agent.py    # terminal 1 — Rocky on :9102
 python grace_agent.py    # terminal 2 — Grace on :9101
 ```
 
-### Trigger the game (Mission Control)
+### Trigger the negotiation (Mission Control)
 
 ```bash
 curl -s http://localhost:9101/ \
@@ -227,6 +215,8 @@ curl -s http://localhost:9101/ \
   }' | python -m json.tool
 ```
 
+The trigger carries only a `text` Part (`"start"`) — no state. Grace detects the missing `data` Part and initializes the negotiation. From that point on, all state travels exclusively in the `data` Part.
+
 ### Expected response
 
 ```json
@@ -236,15 +226,15 @@ curl -s http://localhost:9101/ \
   "result": {
     "message": {
       "parts": [
-        {"text": "done | rounds: 12 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', ...} | rocky: {'apple': '✦', 'dance': '≈', ...}"}
-      ],
-      "metadata": {
-        "https://example.com/ext/emergent-lang/v1/context": {
-          "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
-          "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
-          "round": 12
+        {"text": "done | rounds: 12 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', ...} | rocky: {'apple': '✦', 'dance': '≈', ...}"},
+        {
+          "data": {
+            "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
+            "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
+            "round": 12
+          }
         }
-      }
+      ]
     }
   }
 }
@@ -268,16 +258,57 @@ curl -s http://localhost:9102/.well-known/agent.json | python -m json.tool
 # Unit tests (no servers needed — mocks the A2A calls)
 pytest test_agents.py -m 'not integration' -v
 
-# Integration test (starts both servers, triggers full game, asserts 100% convergence)
+# Integration test (starts both servers, triggers full session, asserts 100% convergence)
 pytest test_agents.py -m integration -v
 ```
 
 ## Files
 
 ```
-signaling.py      — Game logic (coin, adopt, alignment) — 10 meanings
+emergent.py      — Signaling logic (coin, adopt, alignment) — 10 meanings
+emergent_state.py      — State channel: encode/decode over an A2A data Part
 grace_agent.py    — Stateless ping-pong agent + A2A server/client (Grace)
 rocky_agent.py    — Stateless ping-pong agent + A2A server/client (Rocky)
 test_agents.py    — Unit + integration tests
 requirements.txt  — Dependencies
 ```
+
+## Algorithm
+
+**Lewis Signaling Protocol** (from David Lewis, *Convention*, 1969):
+
+1. **Sender** observes a meaning (a state of the world the Receiver can't see)
+2. **Sender** picks an arbitrary signal (a symbol with no inherent meaning)
+3. **Receiver** sees the signal and guesses which state the world is in
+4. Both succeed only if the Receiver's guess matches reality
+
+No pre-existing language. The signals are arbitrary. But if both players want to coordinate, they converge on a stable mapping — each meaning gets a unique signal. Lewis called this a **signaling convention**: self-reinforcing because neither player benefits from deviating once established.
+
+Nobody sat down and decided "✦ means fire." It emerged from repeated successful coordination. Any consistent mapping works equally well — the one that sticks is arbitrary but stable.
+
+That's what Grace and Rocky do here: Grace proposes symbols for concepts, Rocky adopts them, rounds repeat until they share a dictionary neither designed but both follow.
+
+Our implementation targets disagreements first and exits early once fully aligned.
+
+### Implementation (`emergent.py`)
+
+Three primitives power the entire negotiation:
+
+| Primitive | What it does | Role in the protocol |
+|-----------|-------------|------------------|
+| `coin(mine, theirs)` | Pick a random symbol not yet used by either agent | **Innovation** — introduce a novel sign into the channel |
+| `adopt(lex, meaning, symbol)` | Accept the speaker's symbol for a meaning; remove any conflicting mappings | **Alignment** — convention spreads by imitation |
+| `alignment(a, b)` | Fraction of meanings where both agents agree on the same symbol | **Convergence check** — 1.0 means a fully shared language |
+
+The loop:
+
+1. Speaker picks a meaning that the two agents disagree on
+2. Speaker **coins** a symbol (or reuses one it already has)
+3. Listener **adopts** that symbol — overwrites its own mapping
+4. Measure **alignment** — if 1.0, stop; otherwise next round
+
+There is no reward signal, no gradient, no central dictionary. The language emerges purely from use and imitation — exactly the dynamic Lewis described in 1969.
+
+References:
+- Lewis, *Convention* (1969) — https://plato.stanford.edu/entries/convention/
+- Havrylov & Titov (NIPS 2017) — https://arxiv.org/abs/1705.11192

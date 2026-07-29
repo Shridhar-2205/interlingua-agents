@@ -1,10 +1,11 @@
 """Grace — stateless A2A ping-pong agent.
 
-No state is stored in memory. All game state (both lexicons, round number,
-current referent) travels in A2A message metadata. Each call to execute()
-reads state from the incoming message, does one step, and either responds
-(game over) or calls Rocky with updated state. When the function returns,
-all local variables are gone — the only surviving state is in the message.
+No state is stored in memory. All state (both lexicons, round number, current
+referent, proposed symbol) travels in a structured JSON `data` Part on the A2A
+message (see emergent_state.py). Each call to execute() reads state from the incoming
+message, does one step, and either responds (converged) or calls Rocky with
+updated state. When the function returns, all local variables are gone — the
+only surviving state is in the message.
 """
 from __future__ import annotations
 
@@ -28,14 +29,12 @@ from a2a.types import (
     Message, Part, Role, SendMessageRequest,
 )
 from a2a.types.a2a_pb2 import AgentInterface
-from google.protobuf.json_format import MessageToDict
 
-from signaling import MEANINGS, SYMBOLS, adopt, alignment, coin
+from emergent_state import EmergentState, encode, decode
+from emergent import MEANINGS, SYMBOLS, adopt, alignment, coin
 
-# A2A extension URI — metadata keys are namespaced under this
+# A2A extension URI — advertised on the agent card; state rides in a data Part
 EXT = "https://example.com/ext/emergent-lang/v1"
-CONTEXT = f"{EXT}/context"  # carries: grace_lex, rocky_lex, round, referent
-MESSAGE = f"{EXT}/message"  # carries: the symbol being proposed
 
 ROCKY_URL = "http://localhost:9102"  # Rocky's A2A endpoint
 MAX_ROUNDS = 60  # safety net — stop even if not converged
@@ -45,20 +44,19 @@ class GraceExecutor(AgentExecutor):
     """Stateless executor — no instance variables, no stored state.
 
     State flow:
-      1. Read game state from incoming A2A metadata
+      1. Read state from the incoming message's data Part
       2. Do one step (adopt incoming signal, then coin a new one)
-      3. Either respond (done) or call Rocky with updated state in metadata
+      3. Either respond (done) or call Rocky with updated state in a data Part
       4. All local variables are discarded when this function returns
     """
 
     @override
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
-        # Read state from incoming A2A metadata — this is the ONLY source of truth
-        md = context.metadata or {}
-        ctx = md.get(CONTEXT)
+        # Read state from the incoming data Part — this is the ONLY source of truth
+        state = decode(context.message)
 
-        if ctx is None:
-            # No metadata = trigger from Mission Control — initialize the game
+        if not state.grace_lex:
+            # No state = trigger from Mission Control — initialize the negotiation
             # Generate two conflicting lexicons so agents must negotiate
             pool = random.sample(SYMBOLS, len(MEANINGS) * 2)
             grace_lex = {m: pool[i] for i, m in enumerate(MEANINGS)}
@@ -68,17 +66,17 @@ class GraceExecutor(AgentExecutor):
             print(f"[Grace]   grace_lex: {grace_lex}")
             print(f"[Grace]   rocky_lex: {rocky_lex}")
         else:
-            # State arrives from Rocky's last message — read it all from metadata
-            grace_lex = dict(ctx.get("grace_lex", {}))
-            rocky_lex = dict(ctx.get("rocky_lex", {}))
-            rnd = int(ctx.get("round", 0))  # int() because JSON numbers deserialize as float
-            signal = md.get(MESSAGE)
+            # State arrives from Rocky's last message — read it all from the data Part
+            grace_lex = dict(state.grace_lex)
+            rocky_lex = dict(state.rocky_lex)
+            rnd = state.round  # already cast to int by decode
+            signal = state.message
 
             print(f"[Grace] hop {rnd} | received signal '{signal}' from Rocky")
 
             # Adopt Rocky's signal — update Grace's lexicon to match
             if signal:
-                referent = ctx.get("referent")
+                referent = state.referent
                 if referent:
                     print(f"[Grace] hop {rnd} | adopting '{signal}' → meaning '{referent}'")
                     adopt(grace_lex, referent, signal)
@@ -88,7 +86,7 @@ class GraceExecutor(AgentExecutor):
         score = alignment(grace_lex, rocky_lex)
         print(f"[Grace] hop {rnd} | alignment: {score:.0%}")
         if score == 1.0 or rnd >= MAX_ROUNDS:
-            # Game over — respond directly, do NOT call Rocky
+            # Converged — respond directly, do NOT call Rocky
             # Response unwinds back through the call chain to Mission Control
             summary = f"done | rounds: {rnd} | alignment: {score:.0%} | grace: {grace_lex} | rocky: {rocky_lex}"
             print(f"[Grace] hop {rnd} | convergence reached: {summary}")
@@ -97,10 +95,12 @@ class GraceExecutor(AgentExecutor):
                 context_id=context.context_id or "",
                 task_id=context.task_id or "",
                 role=Role.ROLE_AGENT,
-                parts=[Part(text=summary)],
+                parts=[
+                    Part(text=summary),
+                    encode(EmergentState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
+                ],
                 extensions=[EXT],
             )
-            reply.metadata.update({CONTEXT: {"grace_lex": grace_lex, "rocky_lex": rocky_lex, "round": rnd}})
             await event_queue.enqueue_event(reply)
             return
 
@@ -114,27 +114,31 @@ class GraceExecutor(AgentExecutor):
         print(f"[Grace] hop {rnd} | unresolved meanings: {unresolved}")
         print(f"[Grace] hop {rnd} | sending to Rocky →")
 
-        # Send to Rocky via A2A — full game state in metadata, no memory kept
+        # Send to Rocky via A2A — full state in a data Part, no memory kept
         rocky = await create_client(ROCKY_URL, ClientConfig(streaming=False))
         req = SendMessageRequest(
             message=Message(
                 message_id=uuid4().hex, role=Role.ROLE_USER,
-                parts=[Part(text="signal")], extensions=[EXT],
+                parts=[
+                    Part(text="input"),
+                    encode(EmergentState(
+                        grace_lex=grace_lex, rocky_lex=rocky_lex,
+                        round=rnd + 1, referent=referent, message=sym,
+                    )),
+                ],
+                extensions=[EXT],
             ),
         )
-        # All state goes into metadata — nothing stored in memory
-        req.metadata.update({
-            CONTEXT: {"grace_lex": grace_lex, "rocky_lex": rocky_lex, "round": rnd + 1, "referent": referent},
-            MESSAGE: sym,
-        })
 
         # Wait for Rocky's response (he may ping-pong back to us before responding)
         result_text = ""
-        result_metadata = {}
+        result_state: dict = {}
         async for ev in rocky.send_message(req):
             if hasattr(ev, "message") and ev.message.ByteSize():
-                result_text = ev.message.parts[0].text if ev.message.parts else ""
-                result_metadata = MessageToDict(ev.message.metadata) if ev.message.metadata.ByteSize() else {}
+                result_text = next(
+                    (p.text for p in ev.message.parts if p.WhichOneof("content") == "text"), ""
+                )
+                result_state = decode(ev.message)
 
         # Pass through Rocky's response back to whoever called us
         reply = Message(
@@ -142,10 +146,9 @@ class GraceExecutor(AgentExecutor):
             context_id=context.context_id or "",
             task_id=context.task_id or "",
             role=Role.ROLE_AGENT,
-            parts=[Part(text=result_text)],
+            parts=[Part(text=result_text), encode(result_state)],
             extensions=[EXT],
         )
-        reply.metadata.update(result_metadata)
         await event_queue.enqueue_event(reply)
 
     @override
@@ -155,11 +158,11 @@ class GraceExecutor(AgentExecutor):
 
 def build_agent_card(host: str = "localhost", port: int = 9101) -> AgentCard:
     """Agent Card — served at GET /.well-known/agent.json for A2A discovery."""
-    ext = AgentExtension(uri=EXT, description="Game state via extension.", required=False)
-    ext.params.update({"keys": ["context", "message"], "max_rounds": MAX_ROUNDS})
+    ext = AgentExtension(uri=EXT, description="State via a structured data Part.", required=False)
+    ext.params.update({"keys": ["grace_lex", "rocky_lex", "round", "referent", "message"], "max_rounds": MAX_ROUNDS})
     return AgentCard(
         name="Grace",
-        description="Stateless ping-pong signaling game agent (the astronaut).",
+        description="Stateless ping-pong signaling agent (the astronaut).",
         version="2.0.0",
         supported_interfaces=[
             AgentInterface(url=f"http://{host}:{port}/", protocol_binding="JSONRPC"),
@@ -168,7 +171,7 @@ def build_agent_card(host: str = "localhost", port: int = 9101) -> AgentCard:
         default_output_modes=["text/plain"],
         capabilities=AgentCapabilities(streaming=False, extensions=[ext]),
         skills=[AgentSkill(
-            id="emerge", name="Run signaling game",
+            id="emerge", name="Run signaling negotiation",
             description="Stateless ping-pong with Rocky until 10 meanings align.", tags=["emergent"],
         )],
     )
