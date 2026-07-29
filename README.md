@@ -4,7 +4,7 @@ Inspired by the movie *Project Hail Mary*: an astronaut (Grace) and an alien (Ro
 
 ## Data Storage
 
-No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. A structured JSON **`data` Part** on the A2A message **is** the memory. State is NOT in the `text` Part (that's just a human-readable label like `"signal"` or `"done | ..."`), and NOT in message metadata or extensions. Every message carries the full state in one `data` Part (see `emergent_state.py`):
+No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. A structured JSON **`data` Part** on the A2A message **is** the memory. State is NOT in the `text` Part (that's just a human-readable label like `"input"` or `"done | ..."`), and NOT in message metadata or extensions. Every message carries the full state in one `data` Part (see `emergent_state.py`):
 
 ```
 grace_lex   →  Grace's full dictionary       (e.g. {"fire": "✦", "river": "≈", ...})
@@ -80,7 +80,7 @@ carries only `grace_lex`, `rocky_lex`, and `round`.
       "role": "ROLE_USER",
       "extensions": ["https://example.com/ext/emergent-lang/v1"],
       "parts": [
-        {"text": "signal"},
+        {"text": "input"},
         {
           "data": {
             "grace_lex": {"fire": "✦", "river": "≈", "moon": "○"},
@@ -143,7 +143,7 @@ uvicorn.run(app, host="localhost", port=9101)
 rocky = await create_client("http://localhost:9102", ClientConfig(streaming=False))
 req = SendMessageRequest(message=Message(
     ...,
-    parts=[Part(text="signal"), encode(EmergentState(...))],
+    parts=[Part(text="input"), encode(EmergentState(...))],
     extensions=[EXT],
 ))
 
@@ -163,7 +163,7 @@ fixed schema (`EmergentState`) enforced by the helpers in `emergent_state.py`:
 req = SendMessageRequest(message=Message(
     message_id=uuid4().hex, role=Role.ROLE_USER, extensions=[EXT],
     parts=[
-        Part(text="signal"),
+        Part(text="input"),
         encode(EmergentState(
             grace_lex={...}, rocky_lex={...},
             round=3, referent="river", message="≈",
@@ -171,13 +171,13 @@ req = SendMessageRequest(message=Message(
     ],
 ))
 
-# Incoming (server reads) — validated back into a EmergentState (attribute access)
+# Incoming (server reads) — validated back into an EmergentState (attribute access)
 state = decode(context.message)   # -> EmergentState
 grace_lex = state.grace_lex
 signal = state.message                # None on the terminal "done" message
 ```
 
-No shared memory, no database — just A2A messages carrying state in a `data` Part back and forth over HTTP. The `text` Part is cosmetic (human-readable labels like `"signal"` or `"done | ..."`); agents never parse it for state. Extensions/metadata advertise capabilities but carry zero state.
+No shared memory, no database — just A2A messages carrying state in a `data` Part back and forth over HTTP. The `text` Part is cosmetic (human-readable labels like `"input"` or `"done | ..."`); agents never parse it for state. Extensions/metadata advertise capabilities but carry zero state.
 
 ## Run
 
@@ -200,6 +200,7 @@ python grace_agent.py    # terminal 2 — Grace on :9101
 ```bash
 curl -s http://localhost:9101/ \
   -H 'Content-Type: application/json' \
+  -H 'A2A-Version: 1.0' \
   -d '{
     "jsonrpc": "2.0",
     "id": "1",
