@@ -41,8 +41,9 @@ The human knows them by English names. The alien perceives them by description
 |-----|-----------|---------|
 | 1 | 20 | 10 mappings (slow, confused convergence) |
 | 2 | 30 | Failed — agent had existential crisis, gave up |
+| 3 | 36 | 10 mappings (reliable but very slow) |
 
-**Average: 25 exchanges, unreliable alignment.**
+**Average: ~30 exchanges, slow and unreliable.**
 
 The agents wander aimlessly, get distracted by mud, lie down under trees, stare at
 clouds, and use words inconsistently. When they do converge, it takes 3-4x longer
