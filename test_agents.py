@@ -6,9 +6,28 @@ import time
 import httpx
 import pytest
 
+from a2a.types import Message, Part, Role
+
+from a2a_state import pack_state, read_state
 from signaling import MEANINGS, SYMBOLS, adopt, alignment, coin
 from grace_agent import build_agent_card as grace_card, GraceExecutor
 from rocky_agent import RockyExecutor, build_agent_card as rocky_card
+
+
+def _incoming(state: dict | None = None, text: str = "signal") -> Message:
+    """Build an incoming A2A message: a text Part plus an optional state data Part."""
+    parts = [Part(text=text)]
+    if state is not None:
+        parts.append(pack_state(state))
+    return Message(message_id="in", role=Role.ROLE_USER, parts=parts)
+
+
+def _peer_reply(text: str, state: dict | None = None) -> Message:
+    """Build a peer's response message (text Part + optional state data Part)."""
+    parts = [Part(text=text)]
+    if state is not None:
+        parts.append(pack_state(state))
+    return Message(message_id="reply", role=Role.ROLE_AGENT, parts=parts)
 
 
 # --- Unit tests for shared helpers ---
@@ -132,15 +151,13 @@ class TestRockyExecutor:
 
         executor = RockyExecutor()
         ctx = MagicMock()
-        ctx.metadata = {
-            "https://example.com/ext/emergent-lang/v1/context": {
-                "grace_lex": dict(shared_lex),
-                "rocky_lex": {m: SYMBOLS[i] for i, m in enumerate(MEANINGS) if m != "apple"},
-                "round": 1,
-                "referent": "apple",
-            },
-            "https://example.com/ext/emergent-lang/v1/message": SYMBOLS[0],
-        }
+        ctx.message = _incoming({
+            "grace_lex": dict(shared_lex),
+            "rocky_lex": {m: SYMBOLS[i] for i, m in enumerate(MEANINGS) if m != "apple"},
+            "round": 1,
+            "referent": "apple",
+            "message": SYMBOLS[0],
+        })
         ctx.context_id = "test-ctx"
         ctx.task_id = "test-task"
 
@@ -150,6 +167,8 @@ class TestRockyExecutor:
         event = await queue.dequeue_event()
         assert "done" in event.parts[0].text
         assert "100%" in event.parts[0].text
+        # state now rides in a data Part, not metadata
+        assert read_state(event)["round"] == 1
 
     @pytest.mark.asyncio
     async def test_rocky_calls_grace_when_not_aligned(self):
@@ -158,22 +177,18 @@ class TestRockyExecutor:
 
         executor = RockyExecutor()
         ctx = MagicMock()
-        ctx.metadata = {
-            "https://example.com/ext/emergent-lang/v1/context": {
-                "grace_lex": {MEANINGS[0]: SYMBOLS[0]},
-                "rocky_lex": {MEANINGS[0]: SYMBOLS[1]},
-                "round": 1,
-                "referent": MEANINGS[0],
-            },
-            "https://example.com/ext/emergent-lang/v1/message": SYMBOLS[0],
-        }
+        ctx.message = _incoming({
+            "grace_lex": {MEANINGS[0]: SYMBOLS[0]},
+            "rocky_lex": {MEANINGS[0]: SYMBOLS[1]},
+            "round": 1,
+            "referent": MEANINGS[0],
+            "message": SYMBOLS[0],
+        })
         ctx.context_id = "test-ctx"
         ctx.task_id = "test-task"
 
         mock_message = MagicMock()
-        mock_message.message.ByteSize.return_value = True
-        mock_message.message.parts = [MagicMock(text="done | rounds: 2 | alignment: 100%")]
-        mock_message.message.metadata.ByteSize.return_value = 0
+        mock_message.message = _peer_reply("done | rounds: 2 | alignment: 100%")
 
         async def mock_stream(*a, **kw):
             yield mock_message
@@ -200,14 +215,12 @@ class TestGraceExecutor:
 
         executor = GraceExecutor()
         ctx = MagicMock()
-        ctx.metadata = {}
+        ctx.message = _incoming(text="start")  # no state Part = trigger from Mission Control
         ctx.context_id = "test-ctx"
         ctx.task_id = "test-task"
 
         mock_message = MagicMock()
-        mock_message.message.ByteSize.return_value = True
-        mock_message.message.parts = [MagicMock(text="done | rounds: 10 | alignment: 100%")]
-        mock_message.message.metadata.ByteSize.return_value = 0
+        mock_message.message = _peer_reply("done | rounds: 10 | alignment: 100%")
 
         async def mock_stream(*a, **kw):
             yield mock_message

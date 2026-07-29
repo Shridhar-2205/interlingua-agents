@@ -9,15 +9,18 @@ Starting state: 3 meanings, agents disagree on all.
 **Grace → Rocky:**
 ```json
 {
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-      "rocky_lex": {"apple": "○", "dance": "◆", "river": "▽"},
-      "round": 1,
-      "referent": "apple"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "✦"
-  }
+  "parts": [
+    {"text": "signal"},
+    {
+      "data": {
+        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
+        "rocky_lex": {"apple": "○", "dance": "◆", "river": "▽"},
+        "round": 1,
+        "referent": "apple",
+        "message": "✦"
+      }
+    }
+  ]
 }
 ```
 
@@ -26,15 +29,18 @@ Rocky adopts: `"apple" → "✦"` (was "○")
 **Rocky → Grace:**
 ```json
 {
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-      "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
-      "round": 2,
-      "referent": "dance"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "◆"
-  }
+  "parts": [
+    {"text": "signal"},
+    {
+      "data": {
+        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
+        "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
+        "round": 2,
+        "referent": "dance",
+        "message": "◆"
+      }
+    }
+  ]
 }
 ```
 
@@ -45,15 +51,18 @@ Grace adopts: `"dance" → "◆"` (was "≈")
 **Grace → Rocky:**
 ```json
 {
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-      "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
-      "round": 3,
-      "referent": "river"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "△"
-  }
+  "parts": [
+    {"text": "signal"},
+    {
+      "data": {
+        "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
+        "rocky_lex": {"apple": "✦", "dance": "◆", "river": "▽"},
+        "round": 3,
+        "referent": "river",
+        "message": "△"
+      }
+    }
+  ]
 }
 ```
 
@@ -67,14 +76,16 @@ Rocky checks: `alignment == 1.0` (all 3 meanings match)
 ```json
 {
   "message": {
-    "parts": [{"text": "done | rounds: 3 | alignment: 100% | grace: {'apple': '✦', 'dance': '◆', 'river': '△'} | rocky: {'apple': '✦', 'dance': '◆', 'river': '△'}"}],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-        "rocky_lex": {"apple": "✦", "dance": "◆", "river": "△"},
-        "round": 3
+    "parts": [
+      {"text": "done | rounds: 3 | alignment: 100% | grace: {'apple': '✦', 'dance': '◆', 'river': '△'} | rocky: {'apple': '✦', 'dance': '◆', 'river': '△'}"},
+      {
+        "data": {
+          "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
+          "rocky_lex": {"apple": "✦", "dance": "◆", "river": "△"},
+          "round": 3
+        }
       }
-    }
+    ]
   }
 }
 ```
@@ -92,15 +103,18 @@ Starting state: Rocky has `"fire" → "✦"` and Grace has `"moon" → "✦"` �
 **Grace → Rocky:**
 ```json
 {
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"moon": "✦", "fire": "○"},
-      "rocky_lex": {"moon": "◆", "fire": "✦"},
-      "round": 5,
-      "referent": "moon"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "✦"
-  }
+  "parts": [
+    {"text": "signal"},
+    {
+      "data": {
+        "grace_lex": {"moon": "✦", "fire": "○"},
+        "rocky_lex": {"moon": "◆", "fire": "✦"},
+        "round": 5,
+        "referent": "moon",
+        "message": "✦"
+      }
+    }
+  ]
 }
 ```
 
@@ -118,15 +132,18 @@ Rocky sees `"fire"` is unresolved (Grace has it, Rocky doesn't). He coins a fres
 **Rocky → Grace:**
 ```json
 {
-  "metadata": {
-    "https://example.com/ext/emergent-lang/v1/context": {
-      "grace_lex": {"moon": "✦", "fire": "○"},
-      "rocky_lex": {"moon": "✦", "fire": "☆"},
-      "round": 6,
-      "referent": "fire"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "☆"
-  }
+  "parts": [
+    {"text": "signal"},
+    {
+      "data": {
+        "grace_lex": {"moon": "✦", "fire": "○"},
+        "rocky_lex": {"moon": "✦", "fire": "☆"},
+        "round": 6,
+        "referent": "fire",
+        "message": "☆"
+      }
+    }
+  ]
 }
 ```
 
@@ -158,14 +175,16 @@ Grace checks alignment → `1.0` immediately.
 ```json
 {
   "message": {
-    "parts": [{"text": "done | rounds: 0 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', 'river': '△'} | rocky: {'apple': '✦', 'dance': '≈', 'river': '△'}"}],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△"},
-        "round": 0
+    "parts": [
+      {"text": "done | rounds: 0 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', 'river': '△'} | rocky: {'apple': '✦', 'dance': '≈', 'river': '△'}"},
+      {
+        "data": {
+          "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
+          "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△"},
+          "round": 0
+        }
       }
-    }
+    ]
   }
 }
 ```
@@ -183,14 +202,16 @@ After 60 rounds of ping-pong with no convergence:
 ```json
 {
   "message": {
-    "parts": [{"text": "done | rounds: 60 | alignment: 40% | grace: {...} | rocky: {...}"}],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", ...},
-        "rocky_lex": {"apple": "✦", "dance": "≈", "river": "○", "sea": "◆", ...},
-        "round": 60
+    "parts": [
+      {"text": "done | rounds: 60 | alignment: 40% | grace: {...} | rocky: {...}"},
+      {
+        "data": {
+          "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "...": "..."},
+          "rocky_lex": {"apple": "✦", "dance": "≈", "river": "○", "sea": "◆", "...": "..."},
+          "round": 60
+        }
       }
-    }
+    ]
   }
 }
 ```

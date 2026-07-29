@@ -1,7 +1,7 @@
 """Lewis Signaling Game primitives.
 
 Pure functions — no state stored in memory. These are called by stateless
-agents that read/write all state via A2A message metadata.
+agents that read/write all state via an A2A message data Part (see a2a_state.py).
 
 Reference: David Lewis, "Convention: A Philosophical Study" (1969)
 https://plato.stanford.edu/entries/convention/

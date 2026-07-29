@@ -44,7 +44,7 @@ References:
 
 ## Data Storage
 
-No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. The A2A message metadata **is** the memory. Every message carries the full game state:
+No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. A structured JSON **`data` Part** on the A2A message **is** the memory. Every message carries the full game state in that one part (see `a2a_state.py`):
 
 ```
 grace_lex   →  Grace's full dictionary       (e.g. {"fire": "✦", "river": "≈", ...})
@@ -54,9 +54,11 @@ referent    →  concept being discussed       (e.g. "river")
 message     →  symbol being proposed         (e.g. "≈")
 ```
 
-Each agent reads state from the incoming message, does one step, and writes updated state into the outgoing message. When the function returns, all local variables are gone — the only surviving copy of the game state is the message that was just sent.
+In `a2a-sdk==1.1.2` (protobuf schema) a `Part` is a oneof over `text | raw | url | data`, where `data` is a `google.protobuf.Value`, so JSON is carried inline. `pack_state(state)` builds the data Part; `read_state(message)` pulls the dict back out of the first data Part.
 
-Kill either agent mid-game, restart it, and the next call still works — because everything the agent needs is in that call's metadata.
+Each agent reads state from the incoming message's data Part, does one step, and writes updated state into the outgoing message's data Part. When the function returns, all local variables are gone — the only surviving copy of the game state is the message that was just sent.
+
+Kill either agent mid-game, restart it, and the next call still works — because everything the agent needs is in that call's data Part.
 
 ## A2A Ping-Pong Flow
 
@@ -81,19 +83,21 @@ Mission Control ◀──final result────────┘
 ```
 
 - **Mission Control → Grace**: one trigger, no game state (just `{"text": "start"}`)
-- **Grace ↔ Rocky**: agents call each other back and forth, each passing the full game state in metadata
+- **Grace ↔ Rocky**: agents call each other back and forth, each passing the full game state in a `data` Part
 - **Stop**: whichever agent sees `alignment == 1.0` or `round >= 60` just responds instead of calling the other — the response chain unwinds back to Mission Control
 
 Both agents are server AND client. No external loop driver needed.
 
-### Metadata Fields
+### State Fields (data Part)
+
+All fields live in a single `data` Part's JSON object:
 
 | Field | Meaning |
 |-------|---------|
-| `context.grace_lex` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
-| `context.rocky_lex` | Rocky's lexicon |
-| `context.round` | Current round number |
-| `context.referent` | The concept being discussed this round |
+| `grace_lex` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
+| `rocky_lex` | Rocky's lexicon |
+| `round` | Current round number |
+| `referent` | The concept being discussed this round |
 | `message` | The symbol being proposed |
 
 ### Full A2A Message (Grace → Rocky)
@@ -107,17 +111,19 @@ Both agents are server AND client. No external loop driver needed.
     "message": {
       "messageId": "7c9e2b...",
       "role": "ROLE_USER",
-      "parts": [{"text": "signal"}],
       "extensions": ["https://example.com/ext/emergent-lang/v1"],
-      "metadata": {
-        "https://example.com/ext/emergent-lang/v1/context": {
-          "grace_lex": {"fire": "✦", "river": "≈", "moon": "○"},
-          "rocky_lex": {"fire": "○", "river": "△", "moon": "✦"},
-          "round": 3,
-          "referent": "river"
-        },
-        "https://example.com/ext/emergent-lang/v1/message": "≈"
-      }
+      "parts": [
+        {"text": "signal"},
+        {
+          "data": {
+            "grace_lex": {"fire": "✦", "river": "≈", "moon": "○"},
+            "rocky_lex": {"fire": "○", "river": "△", "moon": "✦"},
+            "round": 3,
+            "referent": "river",
+            "message": "≈"
+          }
+        }
+      ]
     }
   }
 }
@@ -130,15 +136,17 @@ Both agents are server AND client. No external loop driver needed.
   "message": {
     "messageId": "b4a8d1...",
     "role": "ROLE_AGENT",
-    "parts": [{"text": "done | rounds: 10 | alignment: 100% | grace: {...} | rocky: {...}"}],
     "extensions": ["https://example.com/ext/emergent-lang/v1"],
-    "metadata": {
-      "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {"fire": "✦", "river": "≈", ...},
-        "rocky_lex": {"fire": "✦", "river": "≈", ...},
-        "round": 10
+    "parts": [
+      {"text": "done | rounds: 10 | alignment: 100% | grace: {...} | rocky: {...}"},
+      {
+        "data": {
+          "grace_lex": {"fire": "✦", "river": "≈", "...": "..."},
+          "rocky_lex": {"fire": "✦", "river": "≈", "...": "..."},
+          "round": 10
+        }
       }
-    }
+    ]
   }
 }
 ```
@@ -166,36 +174,42 @@ uvicorn.run(app, host="localhost", port=9101)
 
 ```python
 rocky = await create_client("http://localhost:9102", ClientConfig(streaming=False))
-req = SendMessageRequest(message=Message(..., extensions=[EXT]))
-req.metadata.update({CONTEXT: {...}, MESSAGE: sym})
+req = SendMessageRequest(message=Message(
+    ...,
+    parts=[Part(text="signal"), pack_state({...})],
+    extensions=[EXT],
+))
 
 async for ev in rocky.send_message(req):
-    # ev.message — the A2A response (parts, metadata, extensions)
+    # ev.message — the A2A response (parts, extensions)
 ```
 
 `create_client(url)` discovers the agent card, then sends `SendMessage` as JSON-RPC POST.
 
 ### Message Passing
 
-Game state travels in A2A extension metadata on every message:
+Game state travels in a structured JSON `data` Part on every message (helpers in `a2a_state.py`):
 
 ```python
-# Outgoing (client writes)
-req.metadata.update({
-    "https://example.com/ext/emergent-lang/v1/context": {
-        "grace_lex": {...}, "rocky_lex": {...}, "round": 3, "referent": "river"
-    },
-    "https://example.com/ext/emergent-lang/v1/message": "≈",
-})
+# Outgoing (client writes) — one text Part + one state data Part
+req = SendMessageRequest(message=Message(
+    message_id=uuid4().hex, role=Role.ROLE_USER, extensions=[EXT],
+    parts=[
+        Part(text="signal"),
+        pack_state({
+            "grace_lex": {...}, "rocky_lex": {...},
+            "round": 3, "referent": "river", "message": "≈",
+        }),
+    ],
+))
 
-# Incoming (server reads)
-md = context.metadata or {}
-ctx = md.get(CONTEXT) or {}
-grace_lex = ctx.get("grace_lex", {})
-signal = md.get(MESSAGE)
+# Incoming (server reads) — pull the dict back out of the data Part
+state = read_state(context.message)
+grace_lex = state.get("grace_lex", {})
+signal = state.get("message")
 ```
 
-No shared memory, no database — just A2A messages carrying state back and forth over HTTP.
+No shared memory, no database — just A2A messages carrying state in a data Part back and forth over HTTP.
 
 ## Run
 
@@ -236,15 +250,15 @@ curl -s http://localhost:9101/ \
   "result": {
     "message": {
       "parts": [
-        {"text": "done | rounds: 12 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', ...} | rocky: {'apple': '✦', 'dance': '≈', ...}"}
-      ],
-      "metadata": {
-        "https://example.com/ext/emergent-lang/v1/context": {
-          "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
-          "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
-          "round": 12
+        {"text": "done | rounds: 12 | alignment: 100% | grace: {'apple': '✦', 'dance': '≈', ...} | rocky: {'apple': '✦', 'dance': '≈', ...}"},
+        {
+          "data": {
+            "grace_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
+            "rocky_lex": {"apple": "✦", "dance": "≈", "river": "△", "sea": "▽", "moon": "◆", "fire": "∿", "star": "☆", "wind": "⬡", "stone": "♁", "tree": "∆"},
+            "round": 12
+          }
         }
-      }
+      ]
     }
   }
 }
@@ -276,6 +290,7 @@ pytest test_agents.py -m integration -v
 
 ```
 signaling.py      — Game logic (coin, adopt, alignment) — 10 meanings
+a2a_state.py      — State channel: pack_state/read_state over an A2A data Part
 grace_agent.py    — Stateless ping-pong agent + A2A server/client (Grace)
 rocky_agent.py    — Stateless ping-pong agent + A2A server/client (Rocky)
 test_agents.py    — Unit + integration tests
