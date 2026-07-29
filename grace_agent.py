@@ -30,7 +30,7 @@ from a2a.types import (
 )
 from a2a.types.a2a_pb2 import AgentInterface
 
-from a2a_state import pack_state, read_state
+from a2a_state import GameState, pack_state, read_state
 from signaling import MEANINGS, SYMBOLS, adopt, alignment, coin
 
 # A2A extension URI — advertised on the agent card; game state rides in a data Part
@@ -55,7 +55,7 @@ class GraceExecutor(AgentExecutor):
         # Read state from the incoming data Part — this is the ONLY source of truth
         state = read_state(context.message)
 
-        if not state:
+        if not state.grace_lex:
             # No state = trigger from Mission Control — initialize the game
             # Generate two conflicting lexicons so agents must negotiate
             pool = random.sample(SYMBOLS, len(MEANINGS) * 2)
@@ -67,16 +67,16 @@ class GraceExecutor(AgentExecutor):
             print(f"[Grace]   rocky_lex: {rocky_lex}")
         else:
             # State arrives from Rocky's last message — read it all from the data Part
-            grace_lex = dict(state.get("grace_lex", {}))
-            rocky_lex = dict(state.get("rocky_lex", {}))
-            rnd = int(state.get("round", 0))  # int() because JSON numbers deserialize as float
-            signal = state.get("message")
+            grace_lex = dict(state.grace_lex)
+            rocky_lex = dict(state.rocky_lex)
+            rnd = state.round  # already cast to int by read_state
+            signal = state.message
 
             print(f"[Grace] hop {rnd} | received signal '{signal}' from Rocky")
 
             # Adopt Rocky's signal — update Grace's lexicon to match
             if signal:
-                referent = state.get("referent")
+                referent = state.referent
                 if referent:
                     print(f"[Grace] hop {rnd} | adopting '{signal}' → meaning '{referent}'")
                     adopt(grace_lex, referent, signal)
@@ -97,7 +97,7 @@ class GraceExecutor(AgentExecutor):
                 role=Role.ROLE_AGENT,
                 parts=[
                     Part(text=summary),
-                    pack_state({"grace_lex": grace_lex, "rocky_lex": rocky_lex, "round": rnd}),
+                    pack_state(GameState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
                 ],
                 extensions=[EXT],
             )
@@ -121,10 +121,10 @@ class GraceExecutor(AgentExecutor):
                 message_id=uuid4().hex, role=Role.ROLE_USER,
                 parts=[
                     Part(text="signal"),
-                    pack_state({
-                        "grace_lex": grace_lex, "rocky_lex": rocky_lex,
-                        "round": rnd + 1, "referent": referent, "message": sym,
-                    }),
+                    pack_state(GameState(
+                        grace_lex=grace_lex, rocky_lex=rocky_lex,
+                        round=rnd + 1, referent=referent, message=sym,
+                    )),
                 ],
                 extensions=[EXT],
             ),

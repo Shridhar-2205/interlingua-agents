@@ -29,7 +29,7 @@ from a2a.types import (
 )
 from a2a.types.a2a_pb2 import AgentInterface
 
-from a2a_state import pack_state, read_state
+from a2a_state import GameState, pack_state, read_state
 from signaling import MEANINGS, adopt, alignment, coin
 
 # A2A extension URI — advertised on the agent card; game state rides in a data Part
@@ -53,11 +53,11 @@ class RockyExecutor(AgentExecutor):
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         # Read state from the incoming data Part — this is the ONLY source of truth
         state = read_state(context.message)
-        grace_lex = dict(state.get("grace_lex", {}))
-        rocky_lex = dict(state.get("rocky_lex", {}))
-        rnd = int(state.get("round", 0))  # int() because JSON numbers deserialize as float
-        referent = state.get("referent")
-        signal = state.get("message")
+        grace_lex = dict(state.grace_lex)
+        rocky_lex = dict(state.rocky_lex)
+        rnd = state.round  # already cast to int by read_state
+        referent = state.referent
+        signal = state.message
 
         print(f"[Rocky] hop {rnd} | received signal '{signal}' from Grace for meaning '{referent}'")
 
@@ -82,7 +82,7 @@ class RockyExecutor(AgentExecutor):
                 role=Role.ROLE_AGENT,
                 parts=[
                     Part(text=summary),
-                    pack_state({"grace_lex": grace_lex, "rocky_lex": rocky_lex, "round": rnd}),
+                    pack_state(GameState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
                 ],
                 extensions=[EXT],
             )
@@ -106,10 +106,10 @@ class RockyExecutor(AgentExecutor):
                 message_id=uuid4().hex, role=Role.ROLE_USER,
                 parts=[
                     Part(text="signal"),
-                    pack_state({
-                        "grace_lex": grace_lex, "rocky_lex": rocky_lex,
-                        "round": rnd + 1, "referent": referent, "message": sym,
-                    }),
+                    pack_state(GameState(
+                        grace_lex=grace_lex, rocky_lex=rocky_lex,
+                        round=rnd + 1, referent=referent, message=sym,
+                    )),
                 ],
                 extensions=[EXT],
             ),

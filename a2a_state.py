@@ -5,13 +5,27 @@ metadata. In the 1.1.2 protobuf schema a `Part` is a oneof over
 text | raw | url | data, where `data` is a google.protobuf.Value — so the JSON
 is carried inline (no type/mimeType/bytes wrapper).
 
-All game state (both lexicons, round number, current referent, and the proposed
-symbol) lives in a single `data` Part. Agents stay stateless: read the state
-Part from the incoming message, do one step, write a new state Part on the way out.
+The payload has a FIXED schema — exactly these keys, nothing else:
+
+    grace_lex : dict[str, str]     meaning -> symbol (Grace's lexicon)
+    rocky_lex : dict[str, str]     meaning -> symbol (Rocky's lexicon)
+    round     : int                round counter (crosses the wire as a float
+                                    via protobuf Value; cast back to int on read)
+    referent  : str | None         meaning being negotiated; omitted on the
+                                    terminal "done" message
+    message   : str | None         proposed symbol; omitted on the terminal
+                                    "done" message
+
+`GameState` is the single source of truth for that schema. `pack_state`
+serializes only these keys (rejecting unknown ones and omitting None-valued
+optionals); `read_state` validates back into a `GameState`, casting `round` to
+int and defaulting the optionals to None. Agents stay stateless: read the state
+from the incoming message, do one step, write a new state on the way out.
 """
 from __future__ import annotations
 
-from typing import Any
+from dataclasses import dataclass, field, fields
+from typing import Any, Optional, Union
 
 from google.protobuf import struct_pb2
 from google.protobuf.json_format import MessageToDict
@@ -19,25 +33,91 @@ from google.protobuf.json_format import MessageToDict
 from a2a.types import Part
 
 
-def pack_state(state: dict[str, Any]) -> Part:
-    """Encode game state as a structured JSON `data` Part."""
+@dataclass
+class GameState:
+    """Fixed schema for the signaling-game payload carried in a data Part.
+
+    Optional fields (`referent`, `message`) default to None so the terminal
+    "done" message can omit them cleanly.
+    """
+
+    grace_lex: dict[str, str] = field(default_factory=dict)
+    rocky_lex: dict[str, str] = field(default_factory=dict)
+    round: int = 0
+    referent: Optional[str] = None
+    message: Optional[str] = None
+
+
+# The complete, closed set of allowed payload keys — derived from GameState so
+# the schema has a single definition.
+ALLOWED_KEYS = frozenset(f.name for f in fields(GameState))
+
+
+def _coerce(state: Union[GameState, dict[str, Any]]) -> GameState:
+    """Normalize input into a GameState, rejecting unknown keys."""
+    if isinstance(state, GameState):
+        return state
+    if isinstance(state, dict):
+        unknown = set(state) - ALLOWED_KEYS
+        if unknown:
+            raise ValueError(
+                f"unknown state key(s): {sorted(unknown)}; "
+                f"allowed keys are {sorted(ALLOWED_KEYS)}"
+            )
+        return GameState(**state)
+    raise TypeError(f"state must be GameState or dict, got {type(state).__name__}")
+
+
+def pack_state(state: Union[GameState, dict[str, Any]]) -> Part:
+    """Encode game state as a structured JSON `data` Part.
+
+    Accepts a GameState or a plain dict. Only the fixed schema keys are
+    serialized; unknown keys raise ValueError. None-valued optional fields
+    (referent, message) are omitted rather than written as null.
+    """
+    gs = _coerce(state)
+    payload: dict[str, Any] = {
+        "grace_lex": dict(gs.grace_lex),
+        "rocky_lex": dict(gs.rocky_lex),
+        "round": int(gs.round),
+    }
+    if gs.referent is not None:
+        payload["referent"] = gs.referent
+    if gs.message is not None:
+        payload["message"] = gs.message
+
     value = struct_pb2.Value()
-    value.struct_value.update(state)
+    value.struct_value.update(payload)
     return Part(data=value)
 
 
-def read_state(message: Any) -> dict[str, Any]:
+def read_state(message: Any) -> GameState:
     """Read game state from the first `data` Part of an incoming message.
 
-    Returns an empty dict when there is no message or no data Part (e.g. the
-    initial trigger from Mission Control, which carries only a text Part).
-
-    Note: protobuf stores all numbers as doubles, so ints arrive as floats
-    (3 -> 3.0). Callers cast where exact ints matter (e.g. `int(state["round"])`).
+    Returns an empty GameState (empty lexicons, round 0, optionals None) when
+    there is no message or no data Part — e.g. the initial trigger from Mission
+    Control, which carries only a text Part. Unknown keys raise ValueError, and
+    `round` is cast to int (protobuf stores numbers as doubles, so it arrives as
+    a float such as 3.0).
     """
-    if message is None:
-        return {}
-    for part in message.parts:
-        if part.WhichOneof("content") == "data":
-            return MessageToDict(part).get("data", {})
-    return {}
+    raw: dict[str, Any] = {}
+    if message is not None:
+        for part in message.parts:
+            if part.WhichOneof("content") == "data":
+                raw = MessageToDict(part).get("data", {})
+                break
+
+    unknown = set(raw) - ALLOWED_KEYS
+    if unknown:
+        raise ValueError(
+            f"unknown state key(s): {sorted(unknown)}; "
+            f"allowed keys are {sorted(ALLOWED_KEYS)}"
+        )
+
+    return GameState(
+        grace_lex=dict(raw.get("grace_lex", {})),
+        rocky_lex=dict(raw.get("rocky_lex", {})),
+        round=int(raw.get("round", 0)),
+        referent=raw.get("referent"),
+        message=raw.get("message"),
+    )

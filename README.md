@@ -90,15 +90,22 @@ Both agents are server AND client. No external loop driver needed.
 
 ### State Fields (data Part)
 
-All fields live in a single `data` Part's JSON object:
+All fields live in a single `data` Part's JSON object with a **fixed schema** —
+exactly these keys, nothing else. The schema is defined once as the `GameState`
+dataclass in `a2a_state.py`; `pack_state` rejects unknown keys (so typos can't
+pass silently) and `read_state` validates back into a `GameState`.
 
-| Field | Meaning |
-|-------|---------|
-| `grace_lex` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
-| `rocky_lex` | Rocky's lexicon |
-| `round` | Current round number |
-| `referent` | The concept being discussed this round |
-| `message` | The symbol being proposed |
+| Field | Type | Meaning |
+|-------|------|---------|
+| `grace_lex` | `dict[str, str]` | Grace's lexicon (e.g. `{"fire": "✦", "river": "≈"}`) |
+| `rocky_lex` | `dict[str, str]` | Rocky's lexicon |
+| `round` | `int` | Current round number (crosses the wire as a float via protobuf `Value`; cast to `int` on read) |
+| `referent` | `str \| None` | The concept being discussed this round; **omitted** on the terminal "done" message |
+| `message` | `str \| None` | The symbol being proposed; **omitted** on the terminal "done" message |
+
+`referent`/`message` are optional: when `None` they are left out of the payload
+entirely rather than serialized as `null`, so the terminal "done" message
+carries only `grace_lex`, `rocky_lex`, and `round`.
 
 ### Full A2A Message (Grace → Rocky)
 
@@ -176,7 +183,7 @@ uvicorn.run(app, host="localhost", port=9101)
 rocky = await create_client("http://localhost:9102", ClientConfig(streaming=False))
 req = SendMessageRequest(message=Message(
     ...,
-    parts=[Part(text="signal"), pack_state({...})],
+    parts=[Part(text="signal"), pack_state(GameState(...))],
     extensions=[EXT],
 ))
 
@@ -188,7 +195,8 @@ async for ev in rocky.send_message(req):
 
 ### Message Passing
 
-Game state travels in a structured JSON `data` Part on every message (helpers in `a2a_state.py`):
+Game state travels in a structured JSON `data` Part on every message, with a
+fixed schema (`GameState`) enforced by the helpers in `a2a_state.py`:
 
 ```python
 # Outgoing (client writes) — one text Part + one state data Part
@@ -196,17 +204,17 @@ req = SendMessageRequest(message=Message(
     message_id=uuid4().hex, role=Role.ROLE_USER, extensions=[EXT],
     parts=[
         Part(text="signal"),
-        pack_state({
-            "grace_lex": {...}, "rocky_lex": {...},
-            "round": 3, "referent": "river", "message": "≈",
-        }),
+        pack_state(GameState(
+            grace_lex={...}, rocky_lex={...},
+            round=3, referent="river", message="≈",
+        )),
     ],
 ))
 
-# Incoming (server reads) — pull the dict back out of the data Part
-state = read_state(context.message)
-grace_lex = state.get("grace_lex", {})
-signal = state.get("message")
+# Incoming (server reads) — validated back into a GameState (attribute access)
+state = read_state(context.message)   # -> GameState
+grace_lex = state.grace_lex
+signal = state.message                # None on the terminal "done" message
 ```
 
 No shared memory, no database — just A2A messages carrying state in a data Part back and forth over HTTP.

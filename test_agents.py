@@ -8,7 +8,7 @@ import pytest
 
 from a2a.types import Message, Part, Role
 
-from a2a_state import pack_state, read_state
+from a2a_state import ALLOWED_KEYS, GameState, pack_state, read_state
 from signaling import MEANINGS, SYMBOLS, adopt, alignment, coin
 from grace_agent import build_agent_card as grace_card, GraceExecutor
 from rocky_agent import RockyExecutor, build_agent_card as rocky_card
@@ -104,6 +104,52 @@ class TestMeanings:
         assert len(SYMBOLS) >= len(MEANINGS) * 2
 
 
+# --- Fixed data-Part schema tests ---
+
+
+class TestGameStateSchema:
+    def test_pack_state_rejects_unknown_key(self):
+        with pytest.raises(ValueError):
+            pack_state({"grace_lex": {}, "rocky_lex": {}, "round": 1, "bogus": "x"})
+
+    def test_read_state_rejects_unknown_key(self):
+        # Hand-craft a data Part with an extra key and confirm read_state rejects it
+        from google.protobuf import struct_pb2
+        from a2a.types import Message, Part, Role
+
+        value = struct_pb2.Value()
+        value.struct_value.update({"grace_lex": {}, "rocky_lex": {}, "round": 1, "bogus": "x"})
+        msg = Message(message_id="x", role=Role.ROLE_USER, parts=[Part(data=value)])
+        with pytest.raises(ValueError):
+            read_state(msg)
+
+    def test_round_round_trips_as_int(self):
+        part_msg = _incoming({"grace_lex": {"apple": "○"}, "rocky_lex": {}, "round": 7,
+                              "referent": "apple", "message": "○"})
+        state = read_state(part_msg)
+        assert state.round == 7
+        assert isinstance(state.round, int)
+
+    def test_optional_fields_omitted_on_terminal(self):
+        # Terminal "done" state carries no referent/message — they must not be serialized
+        msg = _peer_reply("done", {"grace_lex": {"a": "○"}, "rocky_lex": {"a": "○"}, "round": 3})
+        state = read_state(msg)
+        assert state.referent is None
+        assert state.message is None
+        # ...and the raw data Part JSON should not contain those keys
+        from google.protobuf.json_format import MessageToDict
+        data = next(MessageToDict(p)["data"] for p in msg.parts if p.WhichOneof("content") == "data")
+        assert "referent" not in data and "message" not in data
+
+    def test_allowed_keys_are_exactly_the_schema(self):
+        assert ALLOWED_KEYS == {"grace_lex", "rocky_lex", "round", "referent", "message"}
+
+    def test_gamestate_defaults(self):
+        gs = GameState()
+        assert gs.grace_lex == {} and gs.rocky_lex == {}
+        assert gs.round == 0 and gs.referent is None and gs.message is None
+
+
 # --- Agent card tests ---
 
 
@@ -168,7 +214,7 @@ class TestRockyExecutor:
         assert "done" in event.parts[0].text
         assert "100%" in event.parts[0].text
         # state now rides in a data Part, not metadata
-        assert read_state(event)["round"] == 1
+        assert read_state(event).round == 1
 
     @pytest.mark.asyncio
     async def test_rocky_calls_grace_when_not_aligned(self):
