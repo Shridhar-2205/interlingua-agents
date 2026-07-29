@@ -1,4 +1,4 @@
-"""Tests for stateless ping-pong signaling game agents (a2a-sdk 1.1.2)."""
+"""Tests for stateless ping-pong signaling agents (a2a-sdk 1.1.2)."""
 import asyncio
 import multiprocessing
 import time
@@ -8,7 +8,7 @@ import pytest
 
 from a2a.types import Message, Part, Role
 
-from a2a_state import ALLOWED_KEYS, GameState, pack_state, read_state
+from a2a_state import ALLOWED_KEYS, SignalState, pack_state, read_state
 from signaling import MEANINGS, SYMBOLS, adopt, alignment, coin
 from grace_agent import build_agent_card as grace_card, GraceExecutor
 from rocky_agent import RockyExecutor, build_agent_card as rocky_card
@@ -107,7 +107,7 @@ class TestMeanings:
 # --- Fixed data-Part schema tests ---
 
 
-class TestGameStateSchema:
+class TestSignalStateSchema:
     def test_pack_state_rejects_unknown_key(self):
         with pytest.raises(ValueError):
             pack_state({"grace_lex": {}, "rocky_lex": {}, "round": 1, "bogus": "x"})
@@ -144,8 +144,8 @@ class TestGameStateSchema:
     def test_allowed_keys_are_exactly_the_schema(self):
         assert ALLOWED_KEYS == {"grace_lex", "rocky_lex", "round", "referent", "message"}
 
-    def test_gamestate_defaults(self):
-        gs = GameState()
+    def test_signalstate_defaults(self):
+        gs = SignalState()
         assert gs.grace_lex == {} and gs.rocky_lex == {}
         assert gs.round == 0 and gs.referent is None and gs.message is None
 
@@ -250,7 +250,7 @@ class TestRockyExecutor:
             assert "done" in event.parts[0].text
 
 
-# --- GraceExecutor unit test (stateless — trigger initializes game) ---
+# --- GraceExecutor unit test (stateless — trigger initializes negotiation) ---
 
 
 class TestGraceExecutor:

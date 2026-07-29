@@ -1,4 +1,4 @@
-"""Lewis Signaling Game primitives.
+"""Lewis signaling primitives.
 
 Pure functions — no state stored in memory. These are called by stateless
 agents that read/write all state via an A2A message data Part (see a2a_state.py).

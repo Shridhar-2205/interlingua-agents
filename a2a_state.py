@@ -1,7 +1,7 @@
-"""Game-state channel over A2A messages (a2a-sdk 1.1.2).
+"""State channel over A2A messages (a2a-sdk 1.1.2).
 
-State travels as a structured JSON `data` Part (A2A "Option A"), not in message
-metadata. In the 1.1.2 protobuf schema a `Part` is a oneof over
+All state travels as a structured JSON `data` Part (A2A "Option A"), not in
+message metadata or text. In the 1.1.2 protobuf schema a `Part` is a oneof over
 text | raw | url | data, where `data` is a google.protobuf.Value — so the JSON
 is carried inline (no type/mimeType/bytes wrapper).
 
@@ -16,11 +16,11 @@ The payload has a FIXED schema — exactly these keys, nothing else:
     message   : str | None         proposed symbol; omitted on the terminal
                                     "done" message
 
-`GameState` is the single source of truth for that schema. `pack_state`
+`SignalState` is the single source of truth for that schema. `pack_state`
 serializes only these keys (rejecting unknown ones and omitting None-valued
-optionals); `read_state` validates back into a `GameState`, casting `round` to
-int and defaulting the optionals to None. Agents stay stateless: read the state
-from the incoming message, do one step, write a new state on the way out.
+optionals); `read_state` validates back into a `SignalState`, casting `round` to
+int and defaulting the optionals to None. Agents stay stateless: read state from
+the incoming message, do one step, write new state on the way out.
 """
 from __future__ import annotations
 
@@ -34,8 +34,8 @@ from a2a.types import Part
 
 
 @dataclass
-class GameState:
-    """Fixed schema for the signaling-game payload carried in a data Part.
+class SignalState:
+    """Fixed schema for the signaling payload carried in a data Part.
 
     Optional fields (`referent`, `message`) default to None so the terminal
     "done" message can omit them cleanly.
@@ -48,14 +48,14 @@ class GameState:
     message: Optional[str] = None
 
 
-# The complete, closed set of allowed payload keys — derived from GameState so
+# The complete, closed set of allowed payload keys — derived from SignalState so
 # the schema has a single definition.
-ALLOWED_KEYS = frozenset(f.name for f in fields(GameState))
+ALLOWED_KEYS = frozenset(f.name for f in fields(SignalState))
 
 
-def _coerce(state: Union[GameState, dict[str, Any]]) -> GameState:
-    """Normalize input into a GameState, rejecting unknown keys."""
-    if isinstance(state, GameState):
+def _coerce(state: Union[SignalState, dict[str, Any]]) -> SignalState:
+    """Normalize input into a SignalState, rejecting unknown keys."""
+    if isinstance(state, SignalState):
         return state
     if isinstance(state, dict):
         unknown = set(state) - ALLOWED_KEYS
@@ -64,14 +64,14 @@ def _coerce(state: Union[GameState, dict[str, Any]]) -> GameState:
                 f"unknown state key(s): {sorted(unknown)}; "
                 f"allowed keys are {sorted(ALLOWED_KEYS)}"
             )
-        return GameState(**state)
-    raise TypeError(f"state must be GameState or dict, got {type(state).__name__}")
+        return SignalState(**state)
+    raise TypeError(f"state must be SignalState or dict, got {type(state).__name__}")
 
 
-def pack_state(state: Union[GameState, dict[str, Any]]) -> Part:
-    """Encode game state as a structured JSON `data` Part.
+def pack_state(state: Union[SignalState, dict[str, Any]]) -> Part:
+    """Encode state as a structured JSON `data` Part.
 
-    Accepts a GameState or a plain dict. Only the fixed schema keys are
+    Accepts a SignalState or a plain dict. Only the fixed schema keys are
     serialized; unknown keys raise ValueError. None-valued optional fields
     (referent, message) are omitted rather than written as null.
     """
@@ -91,10 +91,10 @@ def pack_state(state: Union[GameState, dict[str, Any]]) -> Part:
     return Part(data=value)
 
 
-def read_state(message: Any) -> GameState:
-    """Read game state from the first `data` Part of an incoming message.
+def read_state(message: Any) -> SignalState:
+    """Read state from the first `data` Part of an incoming message.
 
-    Returns an empty GameState (empty lexicons, round 0, optionals None) when
+    Returns an empty SignalState (empty lexicons, round 0, optionals None) when
     there is no message or no data Part — e.g. the initial trigger from Mission
     Control, which carries only a text Part. Unknown keys raise ValueError, and
     `round` is cast to int (protobuf stores numbers as doubles, so it arrives as
@@ -114,7 +114,7 @@ def read_state(message: Any) -> GameState:
             f"allowed keys are {sorted(ALLOWED_KEYS)}"
         )
 
-    return GameState(
+    return SignalState(
         grace_lex=dict(raw.get("grace_lex", {})),
         rocky_lex=dict(raw.get("rocky_lex", {})),
         round=int(raw.get("round", 0)),

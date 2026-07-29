@@ -1,11 +1,11 @@
 """Grace — stateless A2A ping-pong agent.
 
-No state is stored in memory. All game state (both lexicons, round number,
-current referent, proposed symbol) travels in a structured JSON `data` Part on
-the A2A message (see a2a_state.py). Each call to execute() reads state from the
-incoming message, does one step, and either responds (game over) or calls Rocky
-with updated state. When the function returns, all local variables are gone —
-the only surviving state is in the message.
+No state is stored in memory. All state (both lexicons, round number, current
+referent, proposed symbol) travels in a structured JSON `data` Part on the A2A
+message (see a2a_state.py). Each call to execute() reads state from the incoming
+message, does one step, and either responds (converged) or calls Rocky with
+updated state. When the function returns, all local variables are gone — the
+only surviving state is in the message.
 """
 from __future__ import annotations
 
@@ -30,10 +30,10 @@ from a2a.types import (
 )
 from a2a.types.a2a_pb2 import AgentInterface
 
-from a2a_state import GameState, pack_state, read_state
+from a2a_state import SignalState, pack_state, read_state
 from signaling import MEANINGS, SYMBOLS, adopt, alignment, coin
 
-# A2A extension URI — advertised on the agent card; game state rides in a data Part
+# A2A extension URI — advertised on the agent card; state rides in a data Part
 EXT = "https://example.com/ext/emergent-lang/v1"
 
 ROCKY_URL = "http://localhost:9102"  # Rocky's A2A endpoint
@@ -44,7 +44,7 @@ class GraceExecutor(AgentExecutor):
     """Stateless executor — no instance variables, no stored state.
 
     State flow:
-      1. Read game state from the incoming message's data Part
+      1. Read state from the incoming message's data Part
       2. Do one step (adopt incoming signal, then coin a new one)
       3. Either respond (done) or call Rocky with updated state in a data Part
       4. All local variables are discarded when this function returns
@@ -56,7 +56,7 @@ class GraceExecutor(AgentExecutor):
         state = read_state(context.message)
 
         if not state.grace_lex:
-            # No state = trigger from Mission Control — initialize the game
+            # No state = trigger from Mission Control — initialize the negotiation
             # Generate two conflicting lexicons so agents must negotiate
             pool = random.sample(SYMBOLS, len(MEANINGS) * 2)
             grace_lex = {m: pool[i] for i, m in enumerate(MEANINGS)}
@@ -86,7 +86,7 @@ class GraceExecutor(AgentExecutor):
         score = alignment(grace_lex, rocky_lex)
         print(f"[Grace] hop {rnd} | alignment: {score:.0%}")
         if score == 1.0 or rnd >= MAX_ROUNDS:
-            # Game over — respond directly, do NOT call Rocky
+            # Converged — respond directly, do NOT call Rocky
             # Response unwinds back through the call chain to Mission Control
             summary = f"done | rounds: {rnd} | alignment: {score:.0%} | grace: {grace_lex} | rocky: {rocky_lex}"
             print(f"[Grace] hop {rnd} | convergence reached: {summary}")
@@ -97,7 +97,7 @@ class GraceExecutor(AgentExecutor):
                 role=Role.ROLE_AGENT,
                 parts=[
                     Part(text=summary),
-                    pack_state(GameState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
+                    pack_state(SignalState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
                 ],
                 extensions=[EXT],
             )
@@ -114,14 +114,14 @@ class GraceExecutor(AgentExecutor):
         print(f"[Grace] hop {rnd} | unresolved meanings: {unresolved}")
         print(f"[Grace] hop {rnd} | sending to Rocky →")
 
-        # Send to Rocky via A2A — full game state in a data Part, no memory kept
+        # Send to Rocky via A2A — full state in a data Part, no memory kept
         rocky = await create_client(ROCKY_URL, ClientConfig(streaming=False))
         req = SendMessageRequest(
             message=Message(
                 message_id=uuid4().hex, role=Role.ROLE_USER,
                 parts=[
                     Part(text="signal"),
-                    pack_state(GameState(
+                    pack_state(SignalState(
                         grace_lex=grace_lex, rocky_lex=rocky_lex,
                         round=rnd + 1, referent=referent, message=sym,
                     )),
@@ -158,11 +158,11 @@ class GraceExecutor(AgentExecutor):
 
 def build_agent_card(host: str = "localhost", port: int = 9101) -> AgentCard:
     """Agent Card — served at GET /.well-known/agent.json for A2A discovery."""
-    ext = AgentExtension(uri=EXT, description="Game state via a structured data Part.", required=False)
+    ext = AgentExtension(uri=EXT, description="State via a structured data Part.", required=False)
     ext.params.update({"keys": ["grace_lex", "rocky_lex", "round", "referent", "message"], "max_rounds": MAX_ROUNDS})
     return AgentCard(
         name="Grace",
-        description="Stateless ping-pong signaling game agent (the astronaut).",
+        description="Stateless ping-pong signaling agent (the astronaut).",
         version="2.0.0",
         supported_interfaces=[
             AgentInterface(url=f"http://{host}:{port}/", protocol_binding="JSONRPC"),
@@ -171,7 +171,7 @@ def build_agent_card(host: str = "localhost", port: int = 9101) -> AgentCard:
         default_output_modes=["text/plain"],
         capabilities=AgentCapabilities(streaming=False, extensions=[ext]),
         skills=[AgentSkill(
-            id="emerge", name="Run signaling game",
+            id="emerge", name="Run signaling negotiation",
             description="Stateless ping-pong with Rocky until 10 meanings align.", tags=["emergent"],
         )],
     )
