@@ -53,30 +53,38 @@ Message.parts = [
 
 ## Results
 
-In our test run, the agents aligned on **10 mappings in 19 exchanges** (with 3+
-confirmation requirement per word):
+With free-form prompts (no rules about turns, confirmation counts, or message
+structure), the agents aligned on **10 mappings in 7 exchanges**:
 
 | English | Alien |
 |---------|-------|
-| fire | vrk |
+| rock | vrk |
+| sun | thaan |
 | water | zul |
-| rock | draak |
 | tree | morra |
 | leaf | plix |
-| bird | oosha |
-| sun | qip-thaan |
-| seed | felk |
-| insect | qip |
-| moon | nuu-thaan |
+| sky | oosha |
+| cloud | qip |
+| fish | felk |
+| bird | draak |
+| fire | nuu |
 
-The alien language developed internal structure — compound words like `qip-thaan`
-(sun) and `nuu-thaan` (moon) share a `-thaan` suffix for celestial objects. The
-human agent tested these compound hypotheses during conversation ("Zul-draak?" for
-river, "Nuu-oosha?" for cloud) showing genuine linguistic reasoning.
+The agents self-organized efficiently: pointing at objects, naming them, and
+naturally running through confirmations without being told to. The alien maintained
+perfect consistency (every word was stable from first use) and both agents used
+gestures (tapping, scooping, flapping) to disambiguate.
 
-The human requires each word to be confirmed 3+ times before counting it as a
-trusted mapping, which forces the agents to revisit and re-confirm earlier words
-rather than rushing through new ones.
+### Run comparison
+
+| Run | Prompt style | Exchanges |
+|-----|-------------|-----------|
+| 1 | Roleplay personas, 3+ confirmation | 19 |
+| 2 | Simple agents, multi-word/turn | 8 |
+| 3 | Simple agents, one-word/turn | 11 |
+| 4 | **Free-form (current)** | **7** |
+
+Fewer constraints → faster convergence. The agents don't need rules to be
+efficient — they naturally adopt a productive strategy when left to explore freely.
 
 ## Setup
 

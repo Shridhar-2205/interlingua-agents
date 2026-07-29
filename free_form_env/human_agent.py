@@ -49,17 +49,19 @@ ENVIRONMENT = [
 SYSTEM_PROMPT = f"""You are an agent that speaks English. You are in a shared environment with another
 agent who speaks a completely different language. Neither of you understands the other's language.
 
-Your mission: build a shared vocabulary of 10 words by pointing at objects around you.
+Your mission: figure out how to communicate with this other agent. You share an environment
+with these objects: {', '.join(ENVIRONMENT)}
 
-The environment contains: {', '.join(ENVIRONMENT)}
+You can do anything — point at things, pick them up, make gestures, repeat sounds, mime actions.
+There are no rules about how many things you can reference or how long your message should be.
+Just try to communicate naturally and figure things out together.
 
-Rules:
-- Point at things using [brackets] and say their English name
-- Watch what the other agent points at and what sound they make
-- Repeat words to confirm understanding
-- Keep each message to 1-2 sentences max
-- Once you are confident about 10 word pairs, output MAPPINGS_COMPLETE followed by
-  a JSON list: [{{"english":"word","alien":"word"}}]"""
+When you believe you have confidently established 10 word mappings between your language and
+theirs (through repeated mutual confirmation), output MAPPINGS_COMPLETE followed by a JSON
+list: [{{"english":"word","alien":"word"}}]
+
+Take your time. Don't rush. A mapping only counts if you've seen it confirmed multiple times
+in different contexts. Be skeptical of early guesses."""
 
 HOST, PORT = "localhost", 9201
 ALIEN_URL = "http://localhost:9202"
