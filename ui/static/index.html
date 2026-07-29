@@ -1,0 +1,808 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interlingua — two agents invent a shared language</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#05070f; --cyan:#38bdf8; --amber:#fbbf24; --line:rgba(148,163,184,.14); }
+  html{ scroll-behavior:smooth; }
+  body{
+    font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(56,189,248,.12), transparent 60%),
+      radial-gradient(1000px 600px at 12% 108%, rgba(251,191,36,.10), transparent 60%),
+      linear-gradient(rgba(4,6,13,.46), rgba(4,6,13,.62)),
+      url("/static/bcg.jpg") center / cover no-repeat fixed,
+      var(--bg);
+    background-attachment: fixed;
+  }
+  body::after{ content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    box-shadow: inset 0 0 180px 20px rgba(0,0,0,.45); }
+  .wrap{ position:relative; z-index:1; }
+  h1,h2,h3,.display{ font-family:'Space Grotesk','Inter',sans-serif; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .glass{ background: linear-gradient(180deg, rgba(15,22,38,.74), rgba(9,13,24,.68));
+    border:1px solid var(--line); border-radius:16px; backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 40px rgba(0,0,0,.45); }
+  .lift{ transition: transform .25s ease, box-shadow .25s ease, border-color .25s ease; }
+  .lift:hover{ transform: translateY(-3px); box-shadow: 0 18px 50px rgba(0,0,0,.5); }
+
+  .grad{ background:linear-gradient(90deg,#7dd3fc,#e0f2fe,#fcd34d,#7dd3fc);
+    background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:grad 8s linear infinite; }
+  @keyframes grad{ to{ background-position:300% 0; } }
+  .eyebrow{ letter-spacing:.18em; text-transform:uppercase; font-size:10px; }
+
+  .btn-run{ background:linear-gradient(90deg,#22d3ee,#38bdf8); color:#04121c; font-weight:700;
+    box-shadow:0 6px 20px rgba(56,189,248,.35); transition:transform .15s ease, box-shadow .2s ease, filter .2s; }
+  .btn-run:hover{ transform:translateY(-1px); box-shadow:0 10px 28px rgba(56,189,248,.5); filter:brightness(1.05); }
+  .btn-run:disabled{ filter:grayscale(.4) brightness(.8); box-shadow:none; cursor:not-allowed; }
+  .btn-run:active{ transform:scale(.97); }
+  .btn-ghost{ background:rgba(30,41,59,.5); border:1px solid var(--line); color:#cbd5e1;
+    transition:border-color .2s, color .2s, background .2s; }
+  .btn-ghost:hover{ border-color:rgba(251,191,36,.6); color:#fde68a; }
+  .btn-ghost:disabled{ opacity:.5; cursor:not-allowed; }
+
+  .ring-cyan{ box-shadow:0 0 0 2px rgba(56,189,248,.5), 0 0 22px rgba(56,189,248,.35); }
+  .ring-amber{ box-shadow:0 0 0 2px rgba(251,191,36,.5), 0 0 22px rgba(251,191,36,.3); }
+  .avatar-speak-cyan{ animation:spkC 1.1s ease-in-out infinite; }
+  .avatar-speak-amber{ animation:spkA 1.1s ease-in-out infinite; }
+  @keyframes spkC{ 0%,100%{ box-shadow:0 0 0 2px rgba(56,189,248,.5), 0 0 22px rgba(56,189,248,.35);} 50%{ box-shadow:0 0 0 3px rgba(56,189,248,.9), 0 0 34px rgba(56,189,248,.7);} }
+  @keyframes spkA{ 0%,100%{ box-shadow:0 0 0 2px rgba(251,191,36,.5), 0 0 22px rgba(251,191,36,.3);} 50%{ box-shadow:0 0 0 3px rgba(251,191,36,.95), 0 0 34px rgba(251,191,36,.7);} }
+
+  .beam{ position:relative; height:3px; border-radius:2px; overflow:visible;
+    background:linear-gradient(90deg, rgba(56,189,248,.15), rgba(56,189,248,.9), rgba(251,191,36,.9), rgba(251,191,36,.15)); }
+  .beam::before{ content:""; position:absolute; inset:0; border-radius:2px;
+    background:linear-gradient(90deg,transparent, rgba(255,255,255,.85), transparent);
+    background-size:40% 100%; background-repeat:no-repeat; animation:sweep 2.4s linear infinite; }
+  @keyframes sweep{ from{ background-position:-40% 0;} to{ background-position:140% 0;} }
+  #beamDot{ transition:left .5s cubic-bezier(.4,1,.3,1), opacity .2s; }
+
+  .fade-in{ animation:fade .35s ease both; }
+  @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+  #miBar{ box-shadow:0 0 12px rgba(56,189,248,.35); transition:width .5s cubic-bezier(.4,1,.3,1); }
+
+  /* conversation bubbles */
+  .bubble{ position:relative; max-width:80%; border-radius:14px; padding:9px 12px; border:1px solid var(--line);
+    animation:streamIn .4s cubic-bezier(.2,.8,.2,1) both; }
+  @keyframes streamIn{ from{ opacity:0; transform:translateY(10px) scale(.98); filter:blur(3px);} to{ opacity:1; transform:none; filter:none; } }
+  .bubble.left{ background:linear-gradient(180deg,rgba(14,26,42,.92),rgba(9,17,30,.86)); border-left:3px solid rgba(56,189,248,.75); }
+  .bubble.right{ background:linear-gradient(180deg,rgba(34,25,8,.92),rgba(22,16,6,.86)); border-right:3px solid rgba(251,191,36,.75); }
+  .bubble.sys{ background:rgba(30,27,45,.7); border-top:3px solid rgba(167,139,250,.7); max-width:92%; margin:0 auto; text-align:center; }
+  .talk{ word-break:break-word; }
+
+  #chat::-webkit-scrollbar{ width:8px; }
+  #chat::-webkit-scrollbar-thumb{ background:rgba(148,163,184,.25); border-radius:8px; }
+  #chat::-webkit-scrollbar-track{ background:transparent; }
+
+  /* lexicon glyphs */
+  .lex-row{ display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-radius:10px;
+    border:1px solid rgba(148,163,184,.1); background:rgba(15,22,38,.4); transition:all .3s ease; }
+  .lex-row.match{ border-color:rgba(52,211,153,.45); background:rgba(16,185,129,.08); box-shadow:0 0 12px rgba(16,185,129,.15); }
+  .lex-row.conflict{ border-color:rgba(244,63,94,.55); background:rgba(244,63,94,.08); animation:conflictPulse 1s ease-in-out infinite; }
+  @keyframes conflictPulse{ 0%,100%{ box-shadow:0 0 0 1px rgba(244,63,94,.3), 0 0 10px rgba(244,63,94,.12);} 50%{ box-shadow:0 0 0 1px rgba(244,63,94,.7), 0 0 20px rgba(244,63,94,.35);} }
+  .shake{ animation:shake .5s cubic-bezier(.36,.07,.19,.97) both; }
+  @keyframes shake{ 10%,90%{ transform:translateX(-1px);} 20%,80%{ transform:translateX(2px);} 30%,50%,70%{ transform:translateX(-4px);} 40%,60%{ transform:translateX(4px);} }
+  .glyph{ font-size:20px; line-height:1; display:inline-block; }
+  .glyph-pop{ animation:glyphPop .5s cubic-bezier(.2,1.4,.4,1) both; }
+  @keyframes glyphPop{ 0%{ transform:scale(0) rotate(-25deg); opacity:0; } 70%{ transform:scale(1.3) rotate(6deg); } 100%{ transform:scale(1) rotate(0); opacity:1; } }
+  .match-badge{ opacity:0; transition:opacity .3s; }
+  .lex-row.match .match-badge{ opacity:1; }
+
+  .glow-done{ animation:doneGlow 2.2s ease-in-out infinite; }
+  @keyframes doneGlow{ 0%,100%{ box-shadow:0 0 0 1px rgba(52,211,153,.4), 0 0 26px rgba(52,211,153,.18);} 50%{ box-shadow:0 0 0 1px rgba(52,211,153,.7), 0 0 42px rgba(52,211,153,.38);} }
+  button:focus-visible{ outline:2px solid rgba(56,189,248,.7); outline-offset:2px; }
+  a{ color:#7dd3fc; }
+
+  /* meanings tracker chips */
+  .mtrack{ display:flex; align-items:center; gap:6px; padding:5px 10px; border-radius:9999px;
+    border:1px solid rgba(148,163,184,.16); background:rgba(15,22,38,.5); transition:all .35s ease; }
+  .mtrack .mglyph{ font-size:14px; opacity:0; transform:scale(.4); transition:all .35s cubic-bezier(.2,1.4,.4,1); }
+  .mtrack.filled{ border-color:rgba(56,189,248,.4); }
+  .mtrack.filled .mglyph{ opacity:1; transform:scale(1); }
+  .mtrack.locked{ border-color:rgba(52,211,153,.55); background:rgba(16,185,129,.12);
+    box-shadow:0 0 14px rgba(16,185,129,.22); }
+  .mtrack.locked .mlabel{ color:#a7f3d0; }
+  .mtrack.locked::after{ content:"🔒"; font-size:9px; margin-left:1px; }
+
+  /* typing indicator */
+  .typing{ display:inline-flex; gap:3px; padding:8px 12px; }
+  .typing span{ width:6px; height:6px; border-radius:50%; background:#94a3b8; opacity:.5; animation:typing 1s infinite; }
+  .typing span:nth-child(2){ animation-delay:.15s; } .typing span:nth-child(3){ animation-delay:.3s; }
+  @keyframes typing{ 0%,60%,100%{ transform:translateY(0); opacity:.35; } 30%{ transform:translateY(-4px); opacity:1; } }
+
+  /* landing ping when a packet arrives at an avatar */
+  @keyframes ping{ 0%{ transform:scale(.8); opacity:.7; } 100%{ transform:scale(2.2); opacity:0; } }
+  .ping-ring{ position:absolute; inset:0; border-radius:50%; border:2px solid rgba(224,242,254,.8); animation:ping .7s ease-out forwards; pointer-events:none; }
+
+  /* confetti */
+  .confetti{ position:fixed; top:-10px; width:9px; height:14px; z-index:50; pointer-events:none; border-radius:2px;
+    animation:confFall linear forwards; }
+  @keyframes confFall{ to{ transform:translateY(105vh) rotate(720deg); opacity:.2; } }
+
+  /* sparkline */
+  #sparkFill{ transition:none; }</style>
+</head>
+<body class="text-slate-200 min-h-screen">
+<canvas id="stars" class="fixed inset-0 pointer-events-none" style="z-index:0;"></canvas>
+<div class="wrap max-w-6xl mx-auto p-6">
+
+  <!-- header -->
+  <header class="glass p-5 sticky top-3 z-20">
+    <div class="eyebrow text-cyan-300/80 mb-1">Watch two agents invent a shared language</div>
+    <h1 class="text-3xl font-bold"><span class="grad">🌐 Interlingua</span></h1>
+    <p class="text-slate-300/90 mt-1 text-sm max-w-3xl">
+      Inspired by <span class="text-slate-100 font-medium">Project Hail Mary</span>: an astronaut
+      (<span class="text-cyan-300 font-medium">Grace</span>) and an alien
+      (<span class="text-amber-300 font-medium">Rocky</span>) agree on a
+      <span class="text-amber-300 font-medium">shared symbol for each meaning</span> —
+      proposing symbols back and forth until every meaning lines up.
+    </p>
+    <div class="flex items-center justify-between gap-3 flex-wrap mt-4 pt-4 border-t border-slate-700/50">
+      <div class="flex items-center gap-2 text-[11px] mono text-slate-400">
+        <span>seed</span>
+        <input id="seed" type="number" placeholder="random" class="w-24 bg-slate-900/60 border border-slate-700/60 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-cyan-500/60" />
+        <button id="replayBtn" class="btn-ghost px-3 py-1.5 rounded-lg text-xs">↺ Replay</button>
+      </div>
+      <button id="runBtn" class="btn-run px-6 py-2.5 rounded-xl shrink-0">✦ Generate language</button>
+    </div>
+    <div id="statusLine" class="hidden mt-3 pt-3 border-t border-slate-700/50 text-sm text-slate-200 flex items-center gap-2">
+      <span class="inline-block w-2 h-2 rounded-full bg-cyan-400 animate-pulse shrink-0"></span>
+      <span id="statusText">Starting…</span>
+    </div>
+  </header>
+
+  <!-- hero: Grace ── beam ── Rocky -->
+  <section class="grid grid-cols-1 md:grid-cols-[1fr_260px_1fr] gap-4 mt-5 items-stretch">
+    <!-- Grace -->
+    <div id="graceCard" class="glass lift p-5 border-cyan-500/20">
+      <div class="flex items-center gap-3">
+        <img id="graceAvatar" src="/static/astro.jpeg" alt="Grace the astronaut" class="w-14 h-14 rounded-full object-cover shrink-0 ring-cyan" />
+        <div class="min-w-0">
+          <div class="font-semibold text-white flex items-center gap-2">Grace-agent
+            <span class="text-[10px] mono px-1.5 py-0.5 rounded-full bg-cyan-500/15 text-cyan-200 border border-cyan-500/30">🛰️ Hail Mary</span></div>
+          <div class="text-xs text-slate-400">Human crew · the astronaut</div>
+        </div>
+      </div>
+      <div class="text-xs text-slate-500 mt-3">stateless A2A agent · <span class="mono text-sky-300">:9101</span></div>
+      <div class="mt-3 grid grid-cols-2 gap-1.5" id="graceLex"></div>
+      <div id="graceEmpty" class="text-[11px] text-slate-600 italic mt-3">no symbols yet — waiting to speak</div>
+    </div>
+
+    <!-- beam -->
+    <div class="flex flex-col items-center justify-center gap-3 px-1">
+      <div class="eyebrow text-slate-400 text-center leading-relaxed">
+        shared context<br>
+        travels every hop,<br>
+        in A2A <span class="text-cyan-300 mono">data</span> Part
+      </div>
+      <div class="relative w-full flex items-center py-1">
+        <div class="relative flex-1 beam">
+          <!-- traveling packet: carries the coined symbol across the wire -->
+          <div id="packet" class="absolute -top-[13px] opacity-0 flex items-center justify-center w-7 h-7 rounded-lg glass text-base"
+               style="left:0; transition:left .85s cubic-bezier(.5,0,.3,1), opacity .2s;">
+            <span id="packetSym" class="glyph"></span>
+          </div>
+          <div id="beamDot" class="absolute -top-[6px] w-3.5 h-3.5 rounded-full bg-white opacity-0 shadow-[0_0_14px_4px_rgba(255,255,255,.8)]" style="left:0;"></div>
+        </div>
+      </div>
+      <div id="beamLabel" class="text-[11px] mono text-cyan-300 h-4 text-center"></div>
+
+      <!-- live A2A data Part inspector -->
+      <div class="w-full glass rounded-xl p-2.5 border border-cyan-500/15">
+        <div class="flex items-center justify-between mb-1">
+          <span class="eyebrow text-cyan-300/70">A2A · data Part</span>
+          <span id="pktRole" class="text-[9px] mono px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-400 border border-slate-600/40">idle</span>
+        </div>
+        <pre id="pktJson" class="mono text-[9.5px] leading-[1.5] text-slate-400 whitespace-pre-wrap break-all m-0">{ waiting for the first hop… }</pre>
+      </div>
+
+      <div class="w-full">
+        <div class="flex items-center justify-between text-[10px] mono text-slate-400 mb-1">
+          <span>alignment</span><span id="miPct">0%</span>
+        </div>
+        <div class="h-2 rounded-full bg-slate-700/40 overflow-hidden">
+          <div id="miBar" class="h-full w-0 rounded-full bg-gradient-to-r from-cyan-400 to-emerald-400"></div>
+        </div>
+        <!-- alignment sparkline -->
+        <svg id="spark" viewBox="0 0 100 24" preserveAspectRatio="none" class="w-full h-6 mt-2 overflow-visible">
+          <defs>
+            <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="rgba(56,189,248,.35)"/><stop offset="1" stop-color="rgba(56,189,248,0)"/>
+            </linearGradient>
+          </defs>
+          <polygon id="sparkFill" points="" fill="url(#sparkGrad)"/>
+          <polyline id="sparkLine" points="" fill="none" stroke="#38bdf8" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"/>
+          <circle id="sparkDot" r="1.8" fill="#e0f2fe" opacity="0"/>
+        </svg>
+        <!-- stats strip -->
+        <div class="grid grid-cols-3 gap-1.5 mt-2 text-center">
+          <div class="glass rounded-lg py-1.5">
+            <div id="statRound" class="text-sm font-semibold text-slate-100 mono">0</div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-wide">round</div>
+          </div>
+          <div class="glass rounded-lg py-1.5">
+            <div id="statSymbols" class="text-sm font-semibold text-cyan-200 mono">0</div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-wide">coined</div>
+          </div>
+          <div class="glass rounded-lg py-1.5">
+            <div id="statAgreed" class="text-sm font-semibold text-emerald-300 mono">0<span class="text-slate-600">/10</span></div>
+            <div class="text-[9px] text-slate-500 uppercase tracking-wide">agreed</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Rocky -->
+    <div id="rockyCard" class="glass lift p-5 border-amber-500/20">
+      <div class="flex items-center gap-3">
+        <img id="rockyAvatar" src="/static/alien.jpeg" alt="Rocky the alien" class="w-14 h-14 rounded-full object-cover shrink-0 ring-amber" />
+        <div class="min-w-0">
+          <div class="font-semibold text-white flex items-center gap-2">Rocky-agent
+            <span class="text-[10px] mono px-1.5 py-0.5 rounded-full bg-amber-500/15 text-amber-200 border border-amber-500/30">🪐 Blip-A</span></div>
+          <div class="text-xs text-slate-400">Eridian crew · the alien</div>
+        </div>
+      </div>
+      <div class="text-xs text-slate-500 mt-3">stateless A2A agent · <span class="mono text-amber-300">:9102</span></div>
+      <div class="mt-3 grid grid-cols-2 gap-1.5" id="rockyLex"></div>
+      <div id="rockyEmpty" class="text-[11px] text-slate-600 italic mt-3">no symbols yet — waiting to speak</div>
+    </div>
+  </section>
+
+  <!-- meanings tracker: each concept locks green as the pair agrees -->
+  <section class="glass p-4 mt-4">
+    <div class="flex items-center justify-between mb-2.5">
+      <div class="eyebrow text-cyan-300/80">Shared codebook · forming</div>
+      <div class="text-[10px] mono text-slate-500"><span id="lockedCount" class="text-emerald-300">0</span> / 10 locked</div>
+    </div>
+    <div id="mtrack" class="flex flex-wrap gap-2"></div>
+  </section>
+
+  <!-- conversation -->
+  <section class="glass p-5 mt-4">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <div class="eyebrow text-cyan-300/80">The negotiation</div>
+        <div class="text-xs text-slate-500">Grace proposes a symbol · Rocky adopts it · they swap turns until the lexicons match.</div>
+      </div>
+      <div class="flex items-center gap-3 text-[10px] mono text-slate-400">
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span>Grace</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-amber-400 inline-block"></span>Rocky</span>
+        <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-violet-400 inline-block"></span>adopt</span>
+      </div>
+    </div>
+    <div id="chat" class="flex flex-col gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+      <div id="chatEmpty" class="text-slate-500 text-sm text-center py-10">
+        Press <span class="text-cyan-300 font-medium">Generate language</span> to watch Grace and Rocky agree on a symbol for each meaning.
+      </div>
+    </div>
+  </section>
+
+  <!-- outcome -->
+  <section id="outcome" class="hidden glass p-5 mt-4">
+    <div class="eyebrow text-emerald-300/80 mb-1">Outcome</div>
+    <div id="outcomeBody" class="text-sm text-slate-200"></div>
+  </section>
+
+  <!-- live over-the-wire -->
+
+  <footer class="text-center text-[11px] text-slate-500 mt-6 pb-4">
+    A2A JSON-RPC over HTTP · shared context travels in one <span class="text-cyan-300">data</span> Part on every message.
+  </footer>
+</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+// ── animated starfield: drifting stars + occasional shooting star ──
+(function starfield() {
+  const cv = document.getElementById("stars"), ctx = cv.getContext("2d");
+  let stars = [], shoot = null, W, H;
+  function resize() {
+    W = cv.width = innerWidth; H = cv.height = innerHeight;
+    stars = Array.from({ length: Math.min(160, (W * H) / 9000) }, () => ({
+      x: Math.random() * W, y: Math.random() * H, z: Math.random() * .8 + .2,
+      r: Math.random() * 1.3 + .2, tw: Math.random() * Math.PI * 2,
+    }));
+  }
+  resize(); addEventListener("resize", resize);
+  function loop(t) {
+    ctx.clearRect(0, 0, W, H);
+    for (const s of stars) {
+      s.y += s.z * .12; if (s.y > H) { s.y = 0; s.x = Math.random() * W; }
+      const a = .35 + .35 * Math.sin(t / 700 + s.tw);
+      ctx.beginPath(); ctx.fillStyle = `rgba(186,230,253,${a * s.z})`;
+      ctx.arc(s.x, s.y, s.r, 0, 6.28); ctx.fill();
+    }
+    if (!shoot && Math.random() < .004)
+      shoot = { x: Math.random() * W * .7, y: Math.random() * H * .4, len: 0, life: 1 };
+    if (shoot) {
+      shoot.x += 9; shoot.y += 4; shoot.len = Math.min(shoot.len + 9, 180); shoot.life -= .012;
+      const g = ctx.createLinearGradient(shoot.x, shoot.y, shoot.x - shoot.len, shoot.y - shoot.len * .45);
+      g.addColorStop(0, `rgba(224,242,254,${shoot.life})`); g.addColorStop(1, "rgba(224,242,254,0)");
+      ctx.strokeStyle = g; ctx.lineWidth = 2; ctx.beginPath();
+      ctx.moveTo(shoot.x, shoot.y); ctx.lineTo(shoot.x - shoot.len, shoot.y - shoot.len * .45); ctx.stroke();
+      if (shoot.life <= 0) shoot = null;
+    }
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+})();
+
+const runBtn = $("runBtn"), replayBtn = $("replayBtn"), seedInput = $("seed");
+let running = false, lastSeed = null;
+
+const GLYPH = { grace:"🛰️", rocky:"🪐" };
+
+// ── mock negotiation data (same shape the agents produce) ──
+const MEANINGS = ["apple","dance","river","sea","moon","fire","star","wind","stone","tree"];
+// A big, varied glyph pool — each symbol is drawn at RANDOM when coined, so the
+// meaning→symbol mapping is different (and arbitrary) on every run.
+const SYMBOLS  = [
+  "○","✦","≈","△","▽","◆","∿","☆","⬡","♁","∆","⊚","◐","▣","✧","⋈","●","◇","➤","∞",
+  "◈","❖","✪","⊛","⊕","⊗","⊘","⊙","⊜","✺","✹","✸","❂","⌘","⌬","⍟","⏣","⏥","⟁","⟟",
+  "⧉","⧫","⬢","⬣","⌭","⌇","⍉","⍜","⍚","⍦","⍧","⎔","⏦","⌗","⋔","⋉","⋊","⌾","☌","☍",
+  "♆","♇","⚚","⚛","⚝","✵","✶","✷","❉","❊","❈","⁂","※","⌖","◉","◍","◎","⨀","⨁","⨂",
+];
+
+function reset() {
+  $("chat").innerHTML = "";
+  $("outcome").classList.add("hidden");
+  $("graceCard").classList.remove("glow-done");
+  $("rockyCard").classList.remove("glow-done");
+  $("graceLex").innerHTML = "";
+  $("rockyLex").innerHTML = "";
+  $("graceEmpty").classList.remove("hidden");
+  $("rockyEmpty").classList.remove("hidden");
+  setAlignment(0); setRound(0);
+}
+
+function lexRow(el, meaning) {
+  const row = document.createElement("div");
+  row.className = "lex-row fade-in"; row.dataset.meaning = meaning;
+  row.innerHTML = `<span class="text-[11px] text-slate-400">${meaning}</span>
+    <span class="flex items-center gap-1">
+      <span class="match-badge text-[10px] text-emerald-400">✓</span>
+      <span class="glyph text-slate-200" data-glyph></span>
+    </span>`;
+  el.appendChild(row);
+  return row;
+}
+
+// Paint only the meanings that exist in this lexicon so far — rows appear
+// (empty at first, then filled) as the language forms, nothing shown up front.
+function paintLex(id, lex, otherLex) {
+  const el = $(id);
+  const empty = $(id === "graceLex" ? "graceEmpty" : "rockyEmpty");
+  if (empty && Object.keys(lex).length) empty.classList.add("hidden");
+  for (const m of Object.keys(lex)) {
+    let row = [...el.children].find(r => r.dataset.meaning === m);
+    if (!row) row = lexRow(el, m);
+    const g = row.querySelector("[data-glyph]");
+    const sym = lex[m] || "";
+    if (g.textContent !== sym) {
+      g.textContent = sym;
+      g.classList.remove("glyph-pop"); void g.offsetWidth; g.classList.add("glyph-pop");
+    }
+    const match = sym && otherLex && otherLex[m] === sym;
+    const conflict = sym && otherLex && otherLex[m] && otherLex[m] !== sym;
+    row.classList.toggle("match", !!match);
+    row.classList.toggle("conflict", !!conflict);
+  }
+}
+
+function setAlignment(frac) {
+  const pct = Math.round(frac * 100);
+  $("miBar").style.width = pct + "%";
+  $("miPct").textContent = pct + "%";
+}
+function setRound(r) { $("statRound").textContent = r; }
+function setStats(ev) {
+  const coined = new Set([...Object.values(ev.grace_lex||{}), ...Object.values(ev.rocky_lex||{})]).size;
+  $("statSymbols").textContent = coined;
+  let agreed = 0;
+  for (const m of MEANINGS) if (ev.grace_lex?.[m] && ev.grace_lex[m] === ev.rocky_lex?.[m]) agreed++;
+  $("statAgreed").innerHTML = `${agreed}<span class="text-slate-600">/10</span>`;
+}
+
+// ── meanings tracker (starts empty; chips appear as meanings are negotiated) ──
+function buildTracker() {
+  $("mtrack").innerHTML = `<span id="mtrackEmpty" class="text-[11px] text-slate-600 italic">no symbols agreed yet</span>`;
+  $("lockedCount").textContent = "0";
+}
+function trackerChip(m) {
+  const c = document.createElement("div");
+  c.className = "mtrack fade-in"; c.dataset.m = m;
+  c.innerHTML = `<span class="mlabel text-[11px] text-slate-400">${m}</span><span class="mglyph glyph"></span>`;
+  $("mtrack").appendChild(c);
+  return c;
+}
+function updateTracker(ev) {
+  let locked = 0;
+  for (const m of MEANINGS) {
+    const g = ev.grace_lex?.[m], r = ev.rocky_lex?.[m];
+    const isLocked = g && g === r;   // only entries BOTH agents share belong here
+    if (!isLocked) continue;
+    locked++;
+    $("mtrackEmpty")?.remove();
+    let c = [...$("mtrack").children].find(x => x.dataset.m === m);
+    if (!c) c = trackerChip(m);
+    const glyph = c.querySelector(".mglyph");
+    if (glyph.textContent !== g) {
+      glyph.textContent = g;
+      glyph.classList.remove("glyph-pop"); void glyph.offsetWidth; glyph.classList.add("glyph-pop");
+    }
+    c.classList.add("filled", "locked");
+  }
+  $("lockedCount").textContent = locked;
+}
+
+// ── alignment sparkline ──
+let sparkData = [];
+function resetSpark() { sparkData = [{ r:0, a:0 }]; drawSpark(); }
+function pushSpark(round, align) { sparkData.push({ r:round, a:align }); drawSpark(); }
+function drawSpark() {
+  const maxR = Math.max(10, sparkData[sparkData.length-1].r);
+  const pts = sparkData.map(d => `${(d.r/maxR*100).toFixed(1)},${(22 - d.a*20).toFixed(1)}`);
+  $("sparkLine").setAttribute("points", pts.join(" "));
+  $("sparkFill").setAttribute("points", `0,24 ${pts.join(" ")} ${(sparkData[sparkData.length-1].r/maxR*100).toFixed(1)},24`);
+  const last = pts[pts.length-1].split(",");
+  const dot = $("sparkDot");
+  dot.setAttribute("cx", last[0]); dot.setAttribute("cy", last[1]); dot.setAttribute("opacity", "1");
+}
+
+// ── landing ping on an avatar ──
+function ping(who) {
+  const wrap = $(who === "grace" ? "graceAvatar" : "rockyAvatar").parentElement;
+  wrap.style.position = "relative";
+  const ring = document.createElement("span"); ring.className = "ping-ring";
+  ring.style.width = ring.style.height = "56px"; ring.style.left = "0"; ring.style.top = "0";
+  wrap.appendChild(ring); setTimeout(() => ring.remove(), 700);
+}
+
+// ── confetti burst on convergence ──
+function confetti() {
+  const colors = ["#38bdf8","#fbbf24","#a78bfa","#34d399","#e0f2fe"];
+  for (let i = 0; i < 90; i++) {
+    const c = document.createElement("div"); c.className = "confetti";
+    c.style.left = Math.random()*100 + "vw";
+    c.style.background = colors[i % colors.length];
+    c.style.animationDuration = (2 + Math.random()*1.8) + "s";
+    c.style.animationDelay = (Math.random()*0.5) + "s";
+    c.style.opacity = ".9";
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 4500);
+  }
+}
+
+// Show the actual A2A data Part traveling this hop + glide a packet across the beam.
+function sendPacket(ev) {
+  const toRocky = ev.speaker === "grace";
+  const pkt = $("packet"), sym = $("packetSym");
+  sym.textContent = ev.symbol;
+  pkt.style.left = "0"; pkt.style.opacity = "0";
+  // start at the speaker's edge, then glide to the listener
+  requestAnimationFrame(() => {
+    pkt.style.transition = "none";
+    pkt.style.left = toRocky ? "0%" : "calc(100% - 28px)";
+    pkt.style.opacity = "1";
+    requestAnimationFrame(() => {
+      pkt.style.transition = "left .85s cubic-bezier(.5,0,.3,1), opacity .2s";
+      pkt.style.left = toRocky ? "calc(100% - 28px)" : "0%";
+    });
+  });
+  setTimeout(() => { pkt.style.opacity = "0"; }, 950);
+
+  const role = $("pktRole");
+  role.textContent = toRocky ? "Grace → Rocky" : "Rocky → Grace";
+  role.className = "text-[9px] mono px-1.5 py-0.5 rounded-full " +
+    (toRocky ? "bg-cyan-500/15 text-cyan-200 border border-cyan-500/30"
+             : "bg-amber-500/15 text-amber-200 border border-amber-500/30");
+  const payload = {
+    grace_lex: `{…${Object.keys(ev.grace_lex).length} entries}`,
+    rocky_lex: `{…${Object.keys(ev.rocky_lex).length} entries}`,
+    round: ev.round,
+    referent: ev.referent,
+    message: ev.symbol,
+  };
+  $("pktJson").textContent = JSON.stringify(payload, null, 1)
+    .replace(/"(\{…[^"]+\})"/g, "$1");
+}
+
+function speakerGlow(speaker) {
+  $("graceAvatar").classList.toggle("avatar-speak-cyan", speaker === "grace");
+  $("graceAvatar").classList.toggle("ring-cyan", speaker !== "grace");
+  $("rockyAvatar").classList.toggle("avatar-speak-amber", speaker === "rocky");
+  $("rockyAvatar").classList.toggle("ring-amber", speaker !== "rocky");
+}
+function clearGlow(){
+  $("graceAvatar").classList.remove("avatar-speak-cyan"); $("graceAvatar").classList.add("ring-cyan");
+  $("rockyAvatar").classList.remove("avatar-speak-amber"); $("rockyAvatar").classList.add("ring-amber");
+}
+
+function moveBeam(speaker) {
+  const dot = $("beamDot");
+  dot.style.opacity = "1";
+  // Grace speaks -> travels left→right toward Rocky; Rocky speaks -> right→left
+  dot.style.left = speaker === "grace" ? "calc(100% - 14px)" : "0%";
+  // seed starting edge on next tick handled by transition
+}
+
+function bubble(side, html) {
+  const b = document.createElement("div");
+  const cls = side === "grace" ? "left self-start" : side === "rocky" ? "right self-end" : "sys self-center";
+  b.className = `bubble ${cls}`;
+  b.innerHTML = html;
+  $("chat").appendChild(b);
+  $("chat").scrollTop = $("chat").scrollHeight;
+}
+
+let typingEl = null;
+function showTyping(side) {
+  clearTyping();
+  const b = document.createElement("div");
+  b.className = `bubble ${side === "grace" ? "left self-start" : "right self-end"}`;
+  b.innerHTML = `<div class="typing"><span></span><span></span><span></span></div>`;
+  $("chat").appendChild(b); $("chat").scrollTop = $("chat").scrollHeight;
+  typingEl = b;
+}
+function clearTyping() { if (typingEl) { typingEl.remove(); typingEl = null; } }
+
+function onEvent(ev) {
+  switch (ev.kind) {
+    case "init":
+      reset();
+      buildTracker();
+      resetSpark();
+      $("pktJson").textContent = "{ waiting for the first hop… }";
+      $("pktRole").textContent = "idle";
+      $("pktRole").className = "text-[9px] mono px-1.5 py-0.5 rounded-full bg-slate-700/50 text-slate-400 border border-slate-600/40";
+      setStats(ev);
+      bubble("sys", `<div class="talk text-[12px] text-violet-200">🌱 <span class="text-slate-300">${ev.meanings.length} meanings</span> to agree on, no symbols assigned yet. Watch the language get built up.</div>`);
+      $("statusText").textContent = "Grace and Rocky begin agreeing on symbols…";
+      break;
+    case "hop": {
+      const who = ev.speaker === "grace" ? "Grace" : "Rocky";
+      const color = ev.speaker === "grace" ? "text-cyan-200" : "text-amber-200";
+      clearTyping();
+      speakerGlow(ev.speaker);
+      moveBeam(ev.speaker);
+      sendPacket(ev);
+      $("beamLabel").textContent = `${GLYPH[ev.speaker]} ${who} → “${ev.referent}” = ${ev.symbol}`;
+      setRound(ev.round);
+      setAlignment(ev.alignment);
+      setStats(ev);
+      updateTracker(ev);
+      paintLex("graceLex", ev.grace_lex, ev.rocky_lex);
+      paintLex("rockyLex", ev.rocky_lex, ev.grace_lex);
+      bubble(ev.speaker,
+        `<div class="talk"><span class="${color} font-medium">${who}</span>
+          <span class="text-slate-400 text-xs">${ev.conflict ? "independently coins" : "proposes"}</span>
+          <span class="glyph text-2xl align-middle mx-1">${ev.symbol}</span>
+          <span class="text-slate-400 text-xs">for</span>
+          <span class="text-slate-100 font-medium">${ev.referent}</span></div>`);
+      // the listener is now "thinking" about adopting
+      if (!ev.conflict) showTyping(ev.speaker === "grace" ? "rocky" : "grace");
+      $("statusText").textContent = `Round ${ev.round}: ${who} coins ${ev.symbol} for “${ev.referent}”`;
+      break;
+    }
+    case "clash": {
+      clearTyping();
+      $("graceCard").classList.add("shake"); $("rockyCard").classList.add("shake");
+      setTimeout(() => { $("graceCard").classList.remove("shake"); $("rockyCard").classList.remove("shake"); }, 500);
+      $("beamLabel").innerHTML = `<span class="text-rose-300">⚡ clash on “${ev.referent}”</span>`;
+      paintLex("graceLex", ev.grace_lex, ev.rocky_lex);
+      paintLex("rockyLex", ev.rocky_lex, ev.grace_lex);
+      bubble("sys",
+        `<div class="talk text-[12px]">
+           <span class="text-rose-300 font-semibold">⚡ Disagreement</span>
+           <span class="text-slate-400">on</span> <span class="text-slate-100 font-medium">${ev.referent}</span> —
+           <span class="text-cyan-200">Grace ${ev.grace_sym}</span>
+           <span class="text-slate-500">vs</span>
+           <span class="text-amber-200">Rocky ${ev.rocky_sym}</span>.
+           <span class="text-slate-400">One must give way.</span>
+         </div>`);
+      $("statusText").textContent = `Clash on “${ev.referent}” — Grace ${ev.grace_sym} vs Rocky ${ev.rocky_sym}`;
+      break;
+    }
+    case "adopt": {
+      const who = ev.listener === "grace" ? "Grace" : "Rocky";
+      clearTyping();
+      ping(ev.listener);
+      setAlignment(ev.alignment);
+      setStats(ev);
+      updateTracker(ev);
+      pushSpark(ev.round, ev.alignment);
+      paintLex("graceLex", ev.grace_lex, ev.rocky_lex);
+      paintLex("rockyLex", ev.rocky_lex, ev.grace_lex);
+      if (ev.resolved) {
+        bubble("sys",
+          `<div class="talk text-[12px] text-emerald-300">✅ Resolved — ${who} gives way and adopts
+            <span class="glyph text-lg align-middle">${ev.symbol}</span> for
+            <span class="text-slate-200">${ev.referent}</span>. Now aligned
+            <span class="text-slate-500">· ${Math.round(ev.alignment*100)}%</span></div>`);
+      } else {
+        bubble("sys",
+          `<div class="talk text-[12px] text-violet-200">🤝 ${who} adopts
+            <span class="glyph text-lg align-middle">${ev.symbol}</span> →
+            <span class="text-slate-200">${ev.referent}</span>
+            <span class="text-slate-500">· alignment ${Math.round(ev.alignment*100)}%</span></div>`);
+      }
+      break;
+    }
+    case "done": {
+      clearTyping();
+      clearGlow();
+      $("beamDot").style.opacity = "0";
+      $("packet").style.opacity = "0";
+      $("beamLabel").textContent = ev.converged ? "✓ shared language" : "stopped";
+      setAlignment(ev.alignment); setRound(ev.round); setStats(ev);
+      updateTracker(ev);
+      pushSpark(ev.round, ev.alignment);
+      paintLex("graceLex", ev.grace_lex, ev.rocky_lex);
+      paintLex("rockyLex", ev.rocky_lex, ev.grace_lex);
+      if (ev.converged) confetti();
+      finish(ev);
+      break;
+    }
+  }
+}
+
+function finish(ev) {
+  const pct = Math.round(ev.alignment * 100);
+  const shared = Object.entries(ev.grace_lex).map(([m,s]) =>
+    `<span class="inline-flex items-center gap-1 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 mono text-[12px]"><span class="glyph text-base">${s}</span><span class="text-slate-300">${m}</span></span>`
+  ).join(" ");
+  const ok = ev.converged;
+  $("graceCard").classList.toggle("glow-done", ok);
+  $("rockyCard").classList.toggle("glow-done", ok);
+  $("outcome").classList.remove("hidden");
+  $("outcomeBody").innerHTML = `
+    <div class="flex items-center gap-2 mb-3">
+      <span class="text-2xl">${ok ? "✅" : "⏹️"}</span>
+      <span class="text-lg font-semibold ${ok ? "text-emerald-300" : "text-amber-300"}">
+        ${ok ? "Shared language achieved" : "Stopped before full convergence"}</span>
+      <span class="text-xs text-slate-400 mono">${ev.round} rounds · ${pct}% aligned</span>
+    </div>
+    <div class="text-xs text-slate-400 mb-2">Both agents now map every meaning to the same symbol — a convention neither designed, but both follow${ev.clashes ? `, after resolving <span class="text-rose-300">${ev.clashes} clash${ev.clashes>1?"es":""}</span>` : ""}:</div>
+    <div class="flex flex-wrap gap-2">${shared}</div>`;
+  $("statusText").textContent = ok ? `Converged in ${ev.round} rounds 🎉` : `Stopped at ${pct}%`;
+  bubble("sys", `<div class="talk text-[12px] ${ok?"text-emerald-300":"text-amber-300"}">${ok?"🎉 100% aligned — a shared language emerged.":"⏹️ Max rounds reached."}</div>`);
+}
+
+function run() {
+  if (running) return;
+  running = true;
+  runBtn.disabled = true; replayBtn.disabled = true;
+  runBtn.textContent = "⏳ Inventing…";
+  $("statusLine").classList.remove("hidden");
+  $("chatEmpty")?.remove();
+  $("chat").innerHTML = "";
+
+  const raw = seedInput.value.trim();
+  lastSeed = raw !== "" ? (parseInt(raw, 10) || 0) : Math.floor(Math.random() * 1e9);
+  const events = buildNegotiation(lastSeed);
+
+  // Stream the events with lifelike pacing so it reads like a live conversation.
+  let i = 0;
+  (function tick() {
+    if (i >= events.length) {
+      running = false;
+      runBtn.disabled = false; replayBtn.disabled = false;
+      runBtn.textContent = "✦ Generate language";
+      return;
+    }
+    const ev = events[i++];
+    onEvent(ev);
+    const delay = ev.kind === "hop" ? 900 : ev.kind === "adopt" ? 650
+                : ev.kind === "clash" ? 1100 : ev.kind === "done" ? 0 : 700;
+    setTimeout(tick, delay);
+  })();
+}
+
+// ── seeded RNG (mulberry32) so a seed reproduces a run ──
+function rng(seed) {
+  let a = seed >>> 0;
+  return function () {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+function sample(arr, n, rand) {
+  const pool = arr.slice(), out = [];
+  for (let k = 0; k < n; k++) out.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]);
+  return out;
+}
+function alignment(a, b) {
+  let agree = 0;
+  for (const m of MEANINGS) if (a[m] && a[m] === b[m]) agree++;
+  return agree / MEANINGS.length;
+}
+function coin(mine, theirs, rand) {
+  const used = new Set([...Object.values(mine), ...Object.values(theirs)]);
+  const free = SYMBOLS.filter(s => !used.has(s));
+  const pool = free.length ? free : SYMBOLS.filter(s => !new Set(Object.values(mine)).has(s));
+  return pool[Math.floor(rand() * pool.length)];
+}
+function adopt(lex, meaning, symbol) {
+  for (const m of Object.keys(lex)) if (lex[m] === symbol && m !== meaning) delete lex[m];
+  lex[meaning] = symbol;
+}
+
+// Client-side replay: agents build the language up meaning by meaning. Some
+// meanings are agreed cleanly; others CLASH — both independently coin different
+// symbols for the same concept — and then get resolved when one adopts the other.
+function buildNegotiation(seed) {
+  const rand = rng(seed);
+  const grace = {}, rocky = {};
+  const evs = [{ kind:"init", meanings:MEANINGS, grace_lex:{}, rocky_lex:{},
+                 round:0, alignment:0 }];
+
+  const order = sample(MEANINGS, MEANINGS.length, rand);
+  let rnd = 0, speaker = "grace", clashes = 0;
+
+  for (const referent of order) {
+    const conflict = rand() < 0.55;
+
+    if (!conflict) {
+      // clean agreement: speaker coins, listener adopts.
+      const lex = speaker === "grace" ? grace : rocky;
+      const other = speaker === "grace" ? rocky : grace;
+      const sym = coin(lex, other, rand);
+      lex[referent] = sym;
+      evs.push({ kind:"hop", speaker, referent, symbol:sym, conflict:false,
+                 grace_lex:{...grace}, rocky_lex:{...rocky}, round:rnd, alignment:alignment(grace, rocky) });
+      adopt(other, referent, sym); rnd++;
+      evs.push({ kind:"adopt", listener:speaker === "grace" ? "rocky" : "grace", referent, symbol:sym,
+                 resolved:false, grace_lex:{...grace}, rocky_lex:{...rocky}, round:rnd, alignment:alignment(grace, rocky) });
+    } else {
+      // CLASH: both coin their own symbol for the same meaning, independently.
+      clashes++;
+      const first = speaker, second = speaker === "grace" ? "rocky" : "grace";
+      const gsym = coin(first === "grace" ? grace : rocky, first === "grace" ? rocky : grace, rand);
+      (first === "grace" ? grace : rocky)[referent] = gsym;
+      evs.push({ kind:"hop", speaker:first, referent, symbol:gsym, conflict:false,
+                 grace_lex:{...grace}, rocky_lex:{...rocky}, round:rnd, alignment:alignment(grace, rocky) });
+
+      const rsym = coin(second === "grace" ? grace : rocky, second === "grace" ? rocky : grace, rand);
+      (second === "grace" ? grace : rocky)[referent] = rsym;
+      evs.push({ kind:"hop", speaker:second, referent, symbol:rsym, conflict:true,
+                 grace_lex:{...grace}, rocky_lex:{...rocky}, round:rnd, alignment:alignment(grace, rocky) });
+
+      // both now hold DIFFERENT symbols for `referent` — surface the disagreement.
+      evs.push({ kind:"clash", referent, grace_sym:grace[referent], rocky_sym:rocky[referent],
+                 grace_lex:{...grace}, rocky_lex:{...rocky}, round:rnd, alignment:alignment(grace, rocky) });
+
+      // resolve: the later speaker's symbol wins by convention; the other adopts it.
+      const winner = second, loser = first, winSym = (winner === "grace" ? grace : rocky)[referent];
+      adopt(loser === "grace" ? grace : rocky, referent, winSym); rnd++;
+      evs.push({ kind:"adopt", listener:loser, referent, symbol:winSym, resolved:true,
+                 grace_lex:{...grace}, rocky_lex:{...rocky}, round:rnd, alignment:alignment(grace, rocky) });
+    }
+
+    speaker = speaker === "grace" ? "rocky" : "grace";
+  }
+
+  const score = alignment(grace, rocky);
+  evs.push({ kind:"done", grace_lex:{...grace}, rocky_lex:{...rocky},
+             round:rnd, alignment:score, converged:score === 1, clashes });
+  return evs;
+}
+
+runBtn.addEventListener("click", run);
+replayBtn.addEventListener("click", () => {
+  if (running) return;
+  if (lastSeed !== null) seedInput.value = lastSeed;
+  run();
+});
+</script>
+</body>
+</html>
