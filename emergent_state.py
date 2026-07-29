@@ -16,9 +16,9 @@ The payload has a FIXED schema — exactly these keys, nothing else:
     message   : str | None         proposed symbol; omitted on the terminal
                                     "done" message
 
-`SignalState` is the single source of truth for that schema. `pack_state`
+`EmergentState` is the single source of truth for that schema. `encode`
 serializes only these keys (rejecting unknown ones and omitting None-valued
-optionals); `read_state` validates back into a `SignalState`, casting `round` to
+optionals); `decode` validates back into an `EmergentState`, casting `round` to
 int and defaulting the optionals to None. Agents stay stateless: read state from
 the incoming message, do one step, write new state on the way out.
 """
@@ -34,12 +34,8 @@ from a2a.types import Part
 
 
 @dataclass
-class SignalState:
-    """Fixed schema for the signaling payload carried in a data Part.
-
-    Optional fields (`referent`, `message`) default to None so the terminal
-    "done" message can omit them cleanly.
-    """
+class EmergentState:
+    """Fixed schema for the payload carried in a data Part."""
 
     grace_lex: dict[str, str] = field(default_factory=dict)
     rocky_lex: dict[str, str] = field(default_factory=dict)
@@ -48,14 +44,12 @@ class SignalState:
     message: Optional[str] = None
 
 
-# The complete, closed set of allowed payload keys — derived from SignalState so
-# the schema has a single definition.
-ALLOWED_KEYS = frozenset(f.name for f in fields(SignalState))
+ALLOWED_KEYS = frozenset(f.name for f in fields(EmergentState))
 
 
-def _coerce(state: Union[SignalState, dict[str, Any]]) -> SignalState:
-    """Normalize input into a SignalState, rejecting unknown keys."""
-    if isinstance(state, SignalState):
+def _normalize(state: Union[EmergentState, dict[str, Any]]) -> EmergentState:
+    """Normalize input into an EmergentState, rejecting unknown keys."""
+    if isinstance(state, EmergentState):
         return state
     if isinstance(state, dict):
         unknown = set(state) - ALLOWED_KEYS
@@ -64,41 +58,32 @@ def _coerce(state: Union[SignalState, dict[str, Any]]) -> SignalState:
                 f"unknown state key(s): {sorted(unknown)}; "
                 f"allowed keys are {sorted(ALLOWED_KEYS)}"
             )
-        return SignalState(**state)
-    raise TypeError(f"state must be SignalState or dict, got {type(state).__name__}")
+        return EmergentState(**state)
+    raise TypeError(f"state must be EmergentState or dict, got {type(state).__name__}")
 
 
-def pack_state(state: Union[SignalState, dict[str, Any]]) -> Part:
-    """Encode state as a structured JSON `data` Part.
-
-    Accepts a SignalState or a plain dict. Only the fixed schema keys are
-    serialized; unknown keys raise ValueError. None-valued optional fields
-    (referent, message) are omitted rather than written as null.
-    """
-    gs = _coerce(state)
+def encode(state: Union[EmergentState, dict[str, Any]]) -> Part:
+    """Encode state into a structured JSON `data` Part for an outgoing A2A message."""
+    es = _normalize(state)
     payload: dict[str, Any] = {
-        "grace_lex": dict(gs.grace_lex),
-        "rocky_lex": dict(gs.rocky_lex),
-        "round": int(gs.round),
+        "grace_lex": dict(es.grace_lex),
+        "rocky_lex": dict(es.rocky_lex),
+        "round": int(es.round),
     }
-    if gs.referent is not None:
-        payload["referent"] = gs.referent
-    if gs.message is not None:
-        payload["message"] = gs.message
+    if es.referent is not None:
+        payload["referent"] = es.referent
+    if es.message is not None:
+        payload["message"] = es.message
 
     value = struct_pb2.Value()
     value.struct_value.update(payload)
     return Part(data=value)
 
 
-def read_state(message: Any) -> SignalState:
-    """Read state from the first `data` Part of an incoming message.
+def decode(message: Any) -> EmergentState:
+    """Decode state from the first `data` Part of an incoming A2A message.
 
-    Returns an empty SignalState (empty lexicons, round 0, optionals None) when
-    there is no message or no data Part — e.g. the initial trigger from Mission
-    Control, which carries only a text Part. Unknown keys raise ValueError, and
-    `round` is cast to int (protobuf stores numbers as doubles, so it arrives as
-    a float such as 3.0).
+    Returns an empty EmergentState when there is no message or no data Part.
     """
     raw: dict[str, Any] = {}
     if message is not None:
@@ -114,7 +99,7 @@ def read_state(message: Any) -> SignalState:
             f"allowed keys are {sorted(ALLOWED_KEYS)}"
         )
 
-    return SignalState(
+    return EmergentState(
         grace_lex=dict(raw.get("grace_lex", {})),
         rocky_lex=dict(raw.get("rocky_lex", {})),
         round=int(raw.get("round", 0)),

@@ -4,7 +4,7 @@ Inspired by the movie *Project Hail Mary*: an astronaut (Grace) and an alien (Ro
 
 ## Data Storage
 
-No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. A structured JSON **`data` Part** on the A2A message **is** the memory. State is NOT in the `text` Part (that's just a human-readable label like `"signal"` or `"done | ..."`), and NOT in message metadata or extensions. Every message carries the full state in one `data` Part (see `a2a_state.py`):
+No in-memory state. Both agents are fully stateless — zero instance variables, no database, no files. A structured JSON **`data` Part** on the A2A message **is** the memory. State is NOT in the `text` Part (that's just a human-readable label like `"signal"` or `"done | ..."`), and NOT in message metadata or extensions. Every message carries the full state in one `data` Part (see `emergent_state.py`):
 
 ```
 grace_lex   →  Grace's full dictionary       (e.g. {"fire": "✦", "river": "≈", ...})
@@ -14,7 +14,7 @@ referent    →  concept being discussed       (e.g. "river")
 message     →  symbol being proposed         (e.g. "≈")
 ```
 
-In `a2a-sdk==1.1.2` (protobuf schema) a `Part` is a oneof over `text | raw | url | data`, where `data` is a `google.protobuf.Value`, so JSON is carried inline. `pack_state(state)` builds the data Part; `read_state(message)` pulls the dict back out of the first data Part.
+In `a2a-sdk==1.1.2` (protobuf schema) a `Part` is a oneof over `text | raw | url | data`, where `data` is a `google.protobuf.Value`, so JSON is carried inline. `encode(state)` builds the data Part; `decode(message)` pulls the dict back out of the first data Part.
 
 Each agent reads state from the incoming message's data Part, does one step, and writes updated state into the outgoing message's data Part. When the function returns, all local variables are gone — the only surviving copy of the state is the message that was just sent.
 
@@ -51,9 +51,9 @@ Both agents are server AND client. No external loop driver needed.
 ### State Fields (data Part)
 
 All fields live in a single `data` Part's JSON object with a **fixed schema** —
-exactly these keys, nothing else. The schema is defined once as the `SignalState`
-dataclass in `a2a_state.py`; `pack_state` rejects unknown keys (so typos can't
-pass silently) and `read_state` validates back into a `SignalState`.
+exactly these keys, nothing else. The schema is defined once as the `EmergentState`
+dataclass in `emergent_state.py`; `encode` rejects unknown keys (so typos can't
+pass silently) and `decode` validates back into a `EmergentState`.
 
 | Field | Type | Meaning |
 |-------|------|---------|
@@ -143,7 +143,7 @@ uvicorn.run(app, host="localhost", port=9101)
 rocky = await create_client("http://localhost:9102", ClientConfig(streaming=False))
 req = SendMessageRequest(message=Message(
     ...,
-    parts=[Part(text="signal"), pack_state(SignalState(...))],
+    parts=[Part(text="signal"), encode(EmergentState(...))],
     extensions=[EXT],
 ))
 
@@ -156,7 +156,7 @@ async for ev in rocky.send_message(req):
 ### Message Passing
 
 State travels in a structured JSON `data` Part on every message, with a
-fixed schema (`SignalState`) enforced by the helpers in `a2a_state.py`:
+fixed schema (`EmergentState`) enforced by the helpers in `emergent_state.py`:
 
 ```python
 # Outgoing (client writes) — one text Part + one state data Part
@@ -164,15 +164,15 @@ req = SendMessageRequest(message=Message(
     message_id=uuid4().hex, role=Role.ROLE_USER, extensions=[EXT],
     parts=[
         Part(text="signal"),
-        pack_state(SignalState(
+        encode(EmergentState(
             grace_lex={...}, rocky_lex={...},
             round=3, referent="river", message="≈",
         )),
     ],
 ))
 
-# Incoming (server reads) — validated back into a SignalState (attribute access)
-state = read_state(context.message)   # -> SignalState
+# Incoming (server reads) — validated back into a EmergentState (attribute access)
+state = decode(context.message)   # -> EmergentState
 grace_lex = state.grace_lex
 signal = state.message                # None on the terminal "done" message
 ```
@@ -264,8 +264,8 @@ pytest test_agents.py -m integration -v
 ## Files
 
 ```
-signaling.py      — Signaling logic (coin, adopt, alignment) — 10 meanings
-a2a_state.py      — State channel: pack_state/read_state over an A2A data Part
+emergent.py      — Signaling logic (coin, adopt, alignment) — 10 meanings
+emergent_state.py      — State channel: encode/decode over an A2A data Part
 grace_agent.py    — Stateless ping-pong agent + A2A server/client (Grace)
 rocky_agent.py    — Stateless ping-pong agent + A2A server/client (Rocky)
 test_agents.py    — Unit + integration tests
@@ -289,7 +289,7 @@ That's what Grace and Rocky do here: Grace proposes symbols for concepts, Rocky 
 
 Our implementation targets disagreements first and exits early once fully aligned.
 
-### Implementation (`signaling.py`)
+### Implementation (`emergent.py`)
 
 Three primitives power the entire negotiation:
 

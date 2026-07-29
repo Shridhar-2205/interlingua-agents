@@ -10,7 +10,7 @@ Starting state: 3 meanings, agents disagree on all.
 ```json
 {
   "parts": [
-    {"text": "signal"},
+    {"text": "input"},
     {
       "data": {
         "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
@@ -30,7 +30,7 @@ Rocky adopts: `"apple" → "✦"` (was "○")
 ```json
 {
   "parts": [
-    {"text": "signal"},
+    {"text": "input"},
     {
       "data": {
         "grace_lex": {"apple": "✦", "dance": "≈", "river": "△"},
@@ -52,7 +52,7 @@ Grace adopts: `"dance" → "◆"` (was "≈")
 ```json
 {
   "parts": [
-    {"text": "signal"},
+    {"text": "input"},
     {
       "data": {
         "grace_lex": {"apple": "✦", "dance": "◆", "river": "△"},
@@ -104,7 +104,7 @@ Starting state: Rocky has `"fire" → "✦"` and Grace has `"moon" → "✦"` �
 ```json
 {
   "parts": [
-    {"text": "signal"},
+    {"text": "input"},
     {
       "data": {
         "grace_lex": {"moon": "✦", "fire": "○"},
@@ -133,7 +133,7 @@ Rocky sees `"fire"` is unresolved (Grace has it, Rocky doesn't). He coins a fres
 ```json
 {
   "parts": [
-    {"text": "signal"},
+    {"text": "input"},
     {
       "data": {
         "grace_lex": {"moon": "✦", "fire": "○"},

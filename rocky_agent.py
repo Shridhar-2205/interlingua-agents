@@ -2,7 +2,7 @@
 
 No state is stored in memory. All state (both lexicons, round number, current
 referent, proposed symbol) travels in a structured JSON `data` Part on the A2A
-message (see a2a_state.py). Each call to execute() reads state from the incoming
+message (see emergent_state.py). Each call to execute() reads state from the incoming
 message, does one step, and either responds (converged) or calls Grace with
 updated state. When the function returns, all local variables are gone — the
 only surviving state is in the message.
@@ -29,8 +29,8 @@ from a2a.types import (
 )
 from a2a.types.a2a_pb2 import AgentInterface
 
-from a2a_state import SignalState, pack_state, read_state
-from signaling import MEANINGS, adopt, alignment, coin
+from emergent_state import EmergentState, encode, decode
+from emergent import MEANINGS, adopt, alignment, coin
 
 # A2A extension URI — advertised on the agent card; state rides in a data Part
 EXT = "https://example.com/ext/emergent-lang/v1"
@@ -52,10 +52,10 @@ class RockyExecutor(AgentExecutor):
     @override
     async def execute(self, context: RequestContext, event_queue: EventQueue) -> None:
         # Read state from the incoming data Part — this is the ONLY source of truth
-        state = read_state(context.message)
+        state = decode(context.message)
         grace_lex = dict(state.grace_lex)
         rocky_lex = dict(state.rocky_lex)
-        rnd = state.round  # already cast to int by read_state
+        rnd = state.round  # already cast to int by decode
         referent = state.referent
         signal = state.message
 
@@ -82,7 +82,7 @@ class RockyExecutor(AgentExecutor):
                 role=Role.ROLE_AGENT,
                 parts=[
                     Part(text=summary),
-                    pack_state(SignalState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
+                    encode(EmergentState(grace_lex=grace_lex, rocky_lex=rocky_lex, round=rnd)),
                 ],
                 extensions=[EXT],
             )
@@ -105,8 +105,8 @@ class RockyExecutor(AgentExecutor):
             message=Message(
                 message_id=uuid4().hex, role=Role.ROLE_USER,
                 parts=[
-                    Part(text="signal"),
-                    pack_state(SignalState(
+                    Part(text="input"),
+                    encode(EmergentState(
                         grace_lex=grace_lex, rocky_lex=rocky_lex,
                         round=rnd + 1, referent=referent, message=sym,
                     )),
@@ -123,7 +123,7 @@ class RockyExecutor(AgentExecutor):
                 result_text = next(
                     (p.text for p in ev.message.parts if p.WhichOneof("content") == "text"), ""
                 )
-                result_state = read_state(ev.message)
+                result_state = decode(ev.message)
 
         # Pass through Grace's response back to whoever called us
         reply = Message(
@@ -131,7 +131,7 @@ class RockyExecutor(AgentExecutor):
             context_id=context.context_id or "",
             task_id=context.task_id or "",
             role=Role.ROLE_AGENT,
-            parts=[Part(text=result_text), pack_state(result_state)],
+            parts=[Part(text=result_text), encode(result_state)],
             extensions=[EXT],
         )
         await event_queue.enqueue_event(reply)
