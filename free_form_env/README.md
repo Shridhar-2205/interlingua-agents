@@ -1,25 +1,29 @@
-# Free Form Environment — First Contact
+# Free Form Environment — Dumb Baseline
 
 Two A2A agents (Human + Alien) in a shared environment of 40 physical objects.
-They communicate over HTTP using the [A2A protocol](https://github.com/google/A2A),
-each powered by an LLM with a persona system prompt. They talk freely — no fixed
-rounds, no external judge — until the human believes they've agreed on 10 word mappings.
+They are intentionally **dumb** — confused, easily distracted, inconsistent, and
+unable to form hypotheses or track patterns. They communicate over HTTP using the
+[A2A protocol](https://github.com/google/A2A) and fumble toward shared vocabulary
+through blind repetition.
+
+This serves as the **baseline** to prove that smarter agents (with Theory of Mind,
+belief tracking, and grounding) converge significantly faster.
 
 ## How it works
 
-- **Human Agent** (port 9201): Speaks English. Points at objects, names them, tries to
-  learn alien words through repetition and gestures.
-- **Alien Agent** (port 9202): Speaks Zyphorian (invented language). Cannot understand
-  English. Responds with its own consistent alien words while mimicking human sounds.
+- **Human Agent** (port 9201): A confused English-speaking creature. Gets distracted,
+  forgets previous exchanges, points at random things, sometimes lies down and stares
+  at the sky. No strategy — just reacts.
+- **Alien Agent** (port 9202): A confused creature making invented sounds. Inconsistent
+  with its own words (vrk vs vrrk vs vruk). Gets distracted, ignores what the human
+  does, sometimes points at the wrong thing entirely.
 
-Both agents are A2A client + server. The human is triggered externally, then drives
-a ping-pong loop: it sends a message to the alien via A2A, gets a reply, generates
-its next response via LLM, and repeats. The loop ends when the human is confident
-it has identified 10 English↔Alien word mappings.
+The human is triggered externally, then drives a ping-pong loop with the alien via
+A2A. The loop ends when the human stumbles into declaring 10 mappings — or gives up.
 
 ## The shared environment
 
-40 fixed objects both agents can see, point at, pick up, and gesture about:
+40 fixed objects both agents can see:
 
 ```
 fire, water, rock, tree, sun, moon, sky, cloud, rain, wind,
@@ -29,70 +33,50 @@ bone, stick, shell, feather, fur, smoke, ice, lightning, shadow, star
 ```
 
 The human knows them by English names. The alien perceives them by description
-(e.g. "the hot bright dancing thing" for fire) and invents its own Zyphorian words.
+(e.g. "the hot bright dancing thing" for fire) and invents its own words.
+
+## Results
+
+| Run | Exchanges | Outcome |
+|-----|-----------|---------|
+| 1 | 20 | 10 mappings (slow, confused convergence) |
+| 2 | 30 | Failed — agent had existential crisis, gave up |
+
+**Average: 25 exchanges, unreliable alignment.**
+
+The agents wander aimlessly, get distracted by mud, lie down under trees, stare at
+clouds, and use words inconsistently. When they do converge, it takes 3-4x longer
+than strategic agents. Sometimes they never converge at all.
+
+### Sample behavior
+
+```
+HUMAN: *looks around, blinking* ... *picks up stick* ... Stick?
+ALIEN: *blinks* ... *stares at creature waving stick*
+HUMAN: *lies down in mud* ... *stares at cloud*
+ALIEN: *sits down too* ... Nuu...
+HUMAN: *yawns* ... *falls asleep*
+```
 
 ## How state travels (A2A data part)
 
 Conversation history is passed as a **JSON data part** in every A2A message.
-Each `Part` carries `data` (a protobuf `Value` with JSON-serialized history) plus
-`media_type: "application/json"`. This means:
+Both agents are fully stateless — they reconstruct conversation history from the
+data part on each incoming request.
 
-- **Both agents are fully stateless** — they reconstruct conversation history
-  from the data part on each incoming request.
-- The human starts fresh if no history is provided (initial trigger), otherwise
-  resumes from the history in the data part.
-- Both agents return their updated history as a data part in every response.
-
-```
+```python
 Message.parts = [
-    Part(text="Vrk! [points at fire]"),                      # the utterance
-    Part(data=Value(string_value=json.dumps(history)),       # full LLM history
+    Part(text="*blinks* ... vrk?"),                             # the utterance
+    Part(data=Value(string_value=json.dumps(history)),          # full LLM history
          media_type="application/json"),
 ]
 ```
-
-## Results
-
-With free-form prompts (no rules about turns, confirmation counts, or message
-structure), the agents aligned on **10 mappings in 7 exchanges**:
-
-| English | Alien |
-|---------|-------|
-| rock | vrk |
-| sun | thaan |
-| water | zul |
-| tree | morra |
-| leaf | plix |
-| sky | oosha |
-| cloud | qip |
-| fish | felk |
-| bird | draak |
-| fire | nuu |
-
-The agents self-organized efficiently: pointing at objects, naming them, and
-naturally running through confirmations without being told to. The alien maintained
-perfect consistency (every word was stable from first use) and both agents used
-gestures (tapping, scooping, flapping) to disambiguate.
-
-### Run comparison
-
-| Run | Prompt style | Exchanges |
-|-----|-------------|-----------|
-| 1 | Roleplay personas, 3+ confirmation | 19 |
-| 2 | Simple agents, multi-word/turn | 8 |
-| 3 | Simple agents, one-word/turn | 11 |
-| 4 | **Free-form (current)** | **7** |
-
-Fewer constraints → faster convergence. The agents don't need rules to be
-efficient — they naturally adopt a productive strategy when left to explore freely.
 
 ## Setup
 
 ```bash
 pip install a2a-sdk httpx uvicorn starlette
 ```
-
-Copy the env file and fill in your API key:
 
 ```bash
 cp .env.sample .env
@@ -101,7 +85,7 @@ cp .env.sample .env
 
 ## Running
 
-Terminal 1 — start the Alien agent:
+Terminal 1 — Alien agent:
 
 ```bash
 cd free_form_env
@@ -109,7 +93,7 @@ export $(grep -v '^#' .env | xargs)
 python alien_agent.py
 ```
 
-Terminal 2 — start the Human agent:
+Terminal 2 — Human agent:
 
 ```bash
 cd free_form_env
@@ -117,7 +101,7 @@ export $(grep -v '^#' .env | xargs)
 python human_agent.py
 ```
 
-Terminal 3 — trigger the conversation:
+Terminal 3 — trigger:
 
 ```bash
 curl -s -X POST http://localhost:9201/ \
@@ -136,39 +120,6 @@ curl -s -X POST http://localhost:9201/ \
   }'
 ```
 
-Or using the A2A SDK client:
-
-```python
-import asyncio
-import httpx
-from uuid import uuid4
-from a2a.client import ClientConfig, create_client
-from a2a.types import Message, Part, Role, SendMessageRequest
-
-async def trigger():
-    http_client = httpx.AsyncClient(timeout=600)
-    client = await create_client(
-        "http://localhost:9201",
-        ClientConfig(streaming=False, httpx_client=http_client),
-    )
-    req = SendMessageRequest(
-        message=Message(
-            message_id=uuid4().hex,
-            role=Role.ROLE_USER,
-            parts=[Part(text="begin")],
-        ),
-    )
-    async for ev in client.send_message(req):
-        if hasattr(ev, "message") and ev.message.ByteSize():
-            for p in ev.message.parts:
-                if p.WhichOneof("content") == "text":
-                    print(p.text)
-
-asyncio.run(trigger())
-```
-
-Watch the human agent's terminal for the live conversation and final mappings.
-
 ## Architecture
 
 ```
@@ -176,12 +127,11 @@ Watch the human agent's terminal for the live conversation and final mappings.
 │  Human Agent    │◄────────────────────────►  │  Alien Agent    │
 │  :9201          │  text + data (history)     │  :9202          │
 │                 │                            │                 │
-│  Persona: EN    │                            │  Persona: ZYP   │
-│  LLM: inline    │                            │  LLM: inline    │
-│  Drives loop    │                            │  Responds only  │
+│  Dumb creature  │                            │  Dumb creature  │
+│  English sounds │                            │  Alien sounds   │
+│  No strategy    │                            │  Inconsistent   │
+│  Easily confused│                            │  Easily confused│
 │  Stateless      │                            │  Stateless      │
-│  (history from data part)                    │  (history from  │
-│                 │                            │   data part)    │
 └─────────────────┘                            └─────────────────┘
         ▲
         │ trigger (curl / A2A client)
@@ -189,8 +139,5 @@ Watch the human agent's terminal for the live conversation and final mappings.
    External caller
 ```
 
-Each A2A message carries two parts: a text part (the utterance) and a data part
-(the full LLM conversation history as JSON). Both agents are stateless — they
-rebuild context from the incoming data part on every request. No shared state,
-no external coordination — just two agents talking over HTTP with history on the
-wire until they converge on 10 word mappings.
+No theory of mind. No belief tracking. No grounding. Just two confused creatures
+bumbling around in a shared environment, occasionally making sounds at each other.
