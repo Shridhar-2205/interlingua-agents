@@ -67,6 +67,7 @@ followed by a JSON list of exactly 10 pairs: [{{"english":"word","alien":"word"}
 
 HOST, PORT = "localhost", 9201
 ALIEN_URL = "http://localhost:9202"
+MAX_EXCHANGES = 40   # safety cap so a run always terminates
 
 
 def call_llm(messages: list[dict]) -> str:
@@ -137,7 +138,7 @@ class SmartHumanExecutor(AgentExecutor):
         human_msg = think()
         print(f"HUMAN: {human_msg}")
 
-        while "MAPPINGS_COMPLETE" not in human_msg:
+        while "MAPPINGS_COMPLETE" not in human_msg and exchange < MAX_EXCHANGES:
             exchange += 1
             alien_reply, _ = await send_to_alien(human_msg, history)
             print(f"ALIEN: {alien_reply}")
@@ -147,7 +148,8 @@ class SmartHumanExecutor(AgentExecutor):
             print(f"HUMAN: {human_msg}")
             print(f"  [{exchange}] confirmed {m['confirmed']}/{m['target']}")
 
-        print(f"\nDONE after {exchange} exchanges | {mind.metrics()}")
+        status = "converged" if "MAPPINGS_COMPLETE" in human_msg else f"stopped at cap {MAX_EXCHANGES}"
+        print(f"\nDONE ({status}) after {exchange} exchanges | {mind.metrics()}")
         await event_queue.enqueue_event(Message(
             message_id=uuid4().hex, context_id=context.context_id or "", task_id=context.task_id or "",
             role=Role.ROLE_AGENT, parts=[Part(text=human_msg), _make_history_part(history)]))
