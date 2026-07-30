@@ -122,16 +122,6 @@ def _print_exchange(exchange: int, sender: str, msg: str) -> None:
         print(f"  {line}")
 
 
-UI_URL = os.environ.get("UI_URL", "http://127.0.0.1:8000")
-
-
-def emit_event(data: dict) -> None:
-    try:
-        httpx.post(f"{UI_URL}/api/robot-event", json=data, timeout=3)
-    except Exception:
-        pass
-
-
 def _print_header(dig_site: str) -> None:
     width = 60
     print("\n" + "═" * width)
@@ -178,27 +168,21 @@ class SmartMapBotExecutor(AgentExecutor):
             )})
 
         _print_header(DIG_SITE)
-        emit_event({"kind": "start", "pair": "smart", "dig_site": DIG_SITE, "landmarks": LANDMARKS})
-
         mapbot_msg = call_llm(history)
         history.append({"role": "assistant", "content": mapbot_msg})
         _print_exchange(0, "SMART MAPBOT  →  signal", mapbot_msg)
-        emit_event({"kind": "signal", "pair": "smart", "turn": 0, "sender": "SmartMapBot", "beeps": mapbot_msg})
 
         while "RENDEZVOUS_ACHIEVED" not in mapbot_msg:
             exchange += 1
             drill_reply, _ = await send_to_smart_drillbot(mapbot_msg, history)
             _print_exchange(exchange, "SMART DRILLBOT  →  guess", drill_reply)
-            emit_event({"kind": "guess", "pair": "smart", "turn": exchange, "sender": "SmartDrillBot", "beeps": drill_reply})
 
             history.append({"role": "user", "content": f"Smart DrillBot transmits: \"{drill_reply}\""})
             mapbot_msg = call_llm(history)
             history.append({"role": "assistant", "content": mapbot_msg})
             _print_exchange(exchange, "SMART MAPBOT  →  response", mapbot_msg)
-            emit_event({"kind": "signal", "pair": "smart", "turn": exchange, "sender": "SmartMapBot", "beeps": mapbot_msg})
 
         _print_done(exchange)
-        emit_event({"kind": "done", "pair": "smart", "turns": exchange, "dig_site": DIG_SITE})
 
         reply = Message(
             message_id=uuid4().hex,

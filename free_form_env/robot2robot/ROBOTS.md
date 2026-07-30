@@ -3,8 +3,8 @@
 Two Mars robots need to meet at a dig site. One has the map, one has the drill.
 Their radio is damaged — they can only send beep sequences. No words.
 
-This experiment runs in **two modes** — smart and emergent — to show
-how communication strategy and protocol invention affect convergence speed.
+This experiment runs in two modes: **dumb** and **smart**, to show how much
+communication strategy matters when the signal channel is severely constrained.
 
 ---
 
@@ -26,6 +26,19 @@ how communication strategy and protocol invention affect convergence speed.
 
 ## Two Pairs
 
+### Dumb Pair (ports 9205 / 9206)
+
+**MapBot** — improvises a different beep encoding every turn. No fixed scheme.
+Sometimes repeats the same pattern, sometimes varies it. Occasionally confirms
+the wrong answer by accident.
+
+**DrillBot** — guesses randomly. No memory of previous beeps. Gets excited and
+rushes to the wrong place. Forgets what patterns meant last turn.
+
+**Result:** Stumbles to the answer in 4–25+ exchanges. Sometimes fails entirely.
+
+---
+
 ### Smart Pair (ports 9207 / 9208)
 
 **Smart MapBot** — uses a consistent encoding: number of dots = landmark index.
@@ -41,42 +54,19 @@ Tracks which patterns got a yes/no and narrows down the answer systematically.
 
 ---
 
-### Emergent Pair (ports 9209 / 9210)
+## What This Demonstrates
 
-Neither robot is given an encoding scheme or confirmation signals. They only know
-they can use `•` and `—`. They must invent **both** through interaction:
-
-1. What sequence points at which landmark?
-2. What signal means "yes, correct" vs "no, wrong one"?
-
-**Emergent MapBot** — knows the dig site. Decides its own encoding on the fly.
-Must be consistent enough for DrillBot to learn it. Adapts if DrillBot seems lost.
-Reports the protocol it invented when done.
-
-**Emergent DrillBot** — watches for patterns across turns. Builds hypotheses.
-Uses what it observes to narrow down the answer. No rules given — pure inference.
-
-**Result:** Converges in 5–15 exchanges. The protocol that emerges is different
-every run — sometimes dot-count, sometimes position-based, sometimes repetition.
-The turn count and emergent protocol are printed at the end.
-
----
-
-## What Each Pair Demonstrates
-
-| | Smart | Emergent |
+| | Dumb | Smart |
 |---|---|---|
-| Encoding | Fixed dot-count | Invented during exchange |
-| Confirmation | Single • = yes, — = no | Also invented during exchange |
-| Decoding | Count dots, index lookup | Pattern inference |
-| Temperature | 0.2 (precise) | 0.8 (creative) |
-| Exchanges to converge | 1–2 | 5–15 |
-| Protocol source | Pre-designed | Emergent |
-| Reliability | Reliable | Variable |
+| Encoding | Random, inconsistent | Fixed dot-count scheme |
+| Decoding | Random guessing | Pattern tracking + elimination |
+| Temperature | 1.0 (chaotic) | 0.2 (precise) |
+| Exchanges to converge | 4–25+ | 1–2 |
+| Reliability | Sometimes fails | Reliable |
 
-**The lesson:**
-- Smart → pre-designed protocol, snaps to answer immediately
-- Emergent → neither robot told the rules, they invent them — the interesting contrast
+**The lesson:** same broken radio channel, same 10 landmarks — but a consistent
+encoding strategy and systematic decoding collapses the problem from dozens of
+exchanges to one or two.
 
 ---
 
@@ -91,6 +81,22 @@ cp .env.sample .env
 ---
 
 ## Running
+
+### Dumb Pair
+
+```bash
+# Terminal 1 — DrillBot (responder)
+export $(grep -v '^#' .env | xargs) && python drillbot_agent.py
+
+# Terminal 2 — MapBot (driver, prints the secret dig site on startup)
+export $(grep -v '^#' .env | xargs) && python mapbot_agent.py
+
+# Terminal 3 — trigger
+curl -s -X POST http://localhost:9205/ \
+  -H "Content-Type: application/json" \
+  -H "A2A-Version: 1.0" \
+  -d '{"jsonrpc":"2.0","id":"1","method":"SendMessage","params":{"message":{"messageId":"m1","role":"ROLE_USER","parts":[{"text":"begin"}]}}}'
+```
 
 ### Smart Pair
 
@@ -108,25 +114,37 @@ curl -s -X POST http://localhost:9207/ \
   -d '{"jsonrpc":"2.0","id":"1","method":"SendMessage","params":{"message":{"messageId":"s1","role":"ROLE_USER","parts":[{"text":"begin"}]}}}'
 ```
 
-### Emergent Pair
-
-```bash
-# Terminal 1 — Emergent DrillBot (responder)
-export $(grep -v '^#' .env | xargs) && python emergent_drillbot_agent.py
-
-# Terminal 2 — Emergent MapBot (driver, prints the secret dig site on startup)
-export $(grep -v '^#' .env | xargs) && python emergent_mapbot_agent.py
-
-# Terminal 3 — trigger
-curl -s -X POST http://localhost:9209/ \
-  -H "Content-Type: application/json" \
-  -H "A2A-Version: 1.0" \
-  -d '{"jsonrpc":"2.0","id":"1","method":"SendMessage","params":{"message":{"messageId":"e1","role":"ROLE_USER","parts":[{"text":"begin"}]}}}'
-```
-
 ---
 
 ## Sample Output
+
+### Dumb Pair
+```
+════════════════════════════════════════════════════════════
+  🤖 DUMB ROBOT PAIR  |  Target: shadow-canyon
+════════════════════════════════════════════════════════════
+
+────────────────────────────────────────────────────────────
+ [0] MAPBOT  →  signal
+────────────────────────────────────────────────────────────
+  • — • •
+
+────────────────────────────────────────────────────────────
+ [1] DRILLBOT  →  guess
+────────────────────────────────────────────────────────────
+  ?? — crater-7
+
+────────────────────────────────────────────────────────────
+ [1] MAPBOT  →  response
+────────────────────────────────────────────────────────────
+  — •• —
+
+  ... (many more exchanges) ...
+
+════════════════════════════════════════════════════════════
+  ✅ RENDEZVOUS ACHIEVED after 11 exchange(s)
+════════════════════════════════════════════════════════════
+```
 
 ### Smart Pair
 ```
@@ -134,10 +152,12 @@ curl -s -X POST http://localhost:9209/ \
   🤖 SMART ROBOT PAIR  |  Target: shadow-canyon
 ════════════════════════════════════════════════════════════
 
+────────────────────────────────────────────────────────────
  [0] SMART MAPBOT  →  signal
 ────────────────────────────────────────────────────────────
   • • • • • • • • •
 
+────────────────────────────────────────────────────────────
  [1] SMART DRILLBOT  →  guess
 ────────────────────────────────────────────────────────────
   ANALYSIS: 9 dots — landmark #9
@@ -145,37 +165,13 @@ curl -s -X POST http://localhost:9209/ \
   GUESS: shadow-canyon
   CONFIRM: •
 
+────────────────────────────────────────────────────────────
+ [1] SMART MAPBOT  →  response
+────────────────────────────────────────────────────────────
+  •
+
 ════════════════════════════════════════════════════════════
   ✅ RENDEZVOUS ACHIEVED after 1 exchange(s)
-════════════════════════════════════════════════════════════
-```
-
-### Emergent Pair
-```
-════════════════════════════════════════════════════════════
-  🛸 EMERGENT ROBOT PAIR  |  Target: north-basin (#4)
-  No protocol agreed. They must invent one.
-════════════════════════════════════════════════════════════
-
- [0] EMERGENT MAPBOT  →  signal
-────────────────────────────────────────────────────────────
-  • • — •
-
-  ⏱  Turn 0 — protocol not yet established
-
- [1] EMERGENT DRILLBOT  →  response
-────────────────────────────────────────────────────────────
-  — — •
-
-  ... (several more exchanges while they negotiate) ...
-
-  ⏱  Turn 7 — converged!
-
-════════════════════════════════════════════════════════════
-  ✅ RENDEZVOUS ACHIEVED
-  Turns to learn protocol : 7
-  Total signals exchanged : 14
-  Emergent protocol       : 2 dots then dash = landmark #4, single dot = confirm
 ════════════════════════════════════════════════════════════
 ```
 
@@ -184,23 +180,20 @@ curl -s -X POST http://localhost:9209/ \
 ## Architecture
 
 ```
-┌──────────────────────────┐   A2A/HTTP (beeps only)   ┌──────────────────────────┐
-│  SmartMapBot     :9207   │◄─────────────────────────►│  SmartDrillBot   :9208   │
-│  EmergentMapBot  :9209   │   text + data (history)   │  EmergentDrillBot :9210  │
-│                          │                           │                          │
-│  Knows dig site          │                           │  Has the drill           │
-│  Sends beep codes        │                           │  Decodes beeps           │
-│  Confirms guesses        │                           │  Proposes landmarks      │
-│  Drives the loop         │                           │  Just responds           │
-└──────────────────────────┘                           └──────────────────────────┘
-           ▲
-           │ trigger (curl)
-           │
-      External caller
+┌─────────────────────┐      A2A/HTTP (beeps only)     ┌──────────────────────┐
+│  MapBot / SmartMapBot│◄─────────────────────────────►│ DrillBot/SmartDrillBot│
+│  :9205 / :9207       │   text + data (history)        │  :9206 / :9208        │
+│                      │                                │                       │
+│  Knows dig site      │                                │  Has the drill        │
+│  Sends beep codes    │                                │  Decodes beeps        │
+│  Confirms guesses    │                                │  Proposes landmarks   │
+│  Drives the loop     │                                │  Just responds        │
+└─────────────────────┘                                └──────────────────────┘
+         ▲
+         │ trigger (curl)
+         │
+    External caller
 ```
 
 Dig site is chosen randomly at MapBot startup — DrillBot never sees it directly.
-All agents are fully stateless; history travels in the A2A data part each turn.
-
-The emergent pair also POST live events to the UI server (`/api/robot-event`)
-so the Mars Robots tab at `http://127.0.0.1:8000` shows the exchange in real time.
+Both agents are fully stateless; history travels in the A2A data part each turn.
