@@ -23,6 +23,7 @@ from l9_models import L9, L9Header, L9Payload, Actor, ParticipantSet, Message, C
 # ── The extension identity ─────────────────────────────────────────────────────
 EXT_URI = "https://outshift.io/a2a-ext/emergence/v1"
 EMERGENCE_PAYLOAD_TYPE = "emergence"
+MEDIA_L9 = "application/vnd.sstp.l9+json"   # DataPart media_type (self-describing)
 
 # emergence payload.data schema (documented; not enforced beyond dict):
 #   lexicons   : {agent_id: {concept: symbol}}   full state (agents stay stateless)
@@ -80,12 +81,12 @@ def unpack_l9(d: dict[str, Any]) -> L9:
 # ── a2a-sdk wrappers (lazy import so the core is testable without a2a) ──────────
 
 def to_data_part(l9: L9):
-    """Wrap the L9 envelope in an A2A DataPart (struct Value), like the base repo."""
+    """Wrap the L9 envelope in a self-describing A2A DataPart (media_type set)."""
     from google.protobuf import struct_pb2
     from a2a.types import Part
     value = struct_pb2.Value()
     value.struct_value.update(pack_l9(l9))
-    return Part(data=value)
+    return Part(data=value, media_type=MEDIA_L9)
 
 
 def from_a2a(message) -> Optional[L9]:

@@ -39,13 +39,28 @@ measure movement from a declared baseline.
 
 ## Run
 
+### In-process (no deps) — logic + metrics
+
 ```bash
 python run.py            # genuine: both agents ground before adopting → W≈1.0
 python run.py --mimic    # rocky adopts blind → same 100% alignment, but W drops
 ```
 
-No `a2a-sdk` or LLM needed for the reasoning core — `run.py` simulates the
-ping-pong in-process. Set `LLM_API_KEY` (+ `LLM_MODEL`) to switch on LLM ToM.
+### Live A2A — two real agents over HTTP
+
+```bash
+pip install -r ../requirements.txt        # a2a-sdk==1.1.2, uvicorn, ...
+python rocky.py &                         # Rocky  :9102
+python grace.py &                         # Grace  :9101
+python trigger.py                         # Mission Control → prints the converged result
+```
+
+Each agent serves an Agent Card at `/.well-known/agent-card.json` advertising the
+extension `https://outshift.io/a2a-ext/emergence/v1`; every message is the L9
+envelope in a DataPart (`media_type: application/vnd.sstp.l9+json`).
+
+Set `LLM_API_KEY` (+ `LLM_MODEL`) to switch on LLM ToM; otherwise the deterministic
+fallback runs (no LLM needed).
 
 ## Files
 
@@ -57,13 +72,17 @@ ping-pong in-process. Set `LLM_API_KEY` (+ `LLM_MODEL`) to switch on LLM ToM.
 | `intelligence.py` | LLM ToM at coin/ground, deterministic fallback |
 | `l9_models.py` | vendored lean L9 pydantic models |
 | `l9_envelope.py` | the A2A extension: URI, header/payload builders, pack/unpack |
-| `agent.py` | stateless step() loop + prior formation (A2A transport = TODO) |
+| `agent.py` | stateless step() loop + prior formation (transport-free reasoning core) |
+| `a2a_agent.py` | A2A server+client executor + Agent Card (advertises the extension) |
+| `grace.py` / `rocky.py` | entrypoints (`:9101` / `:9102`) |
+| `trigger.py` | Mission Control — kicks off a session, prints the result |
 | `run.py` | in-process demo driver + metrics report |
 
 ## TODO
 
-1. Wire `agent.py` to `a2a-sdk` servers/clients (mirror base `grace_agent.py`);
-   advertise the extension on the Agent Card via `l9_envelope.agent_card_extension()`.
+1. ~~Wire to a2a-sdk servers/clients + advertise the extension on the Agent Card.~~ ✅ done
 2. Turn on LLM ToM (creds) and widen the perception gap for a sharper genuine-vs-mimic contrast.
-3. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.
-4. Coordinate with colleague on the UI (consumes the `emergence` payload).
+3. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
+4. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.
+5. Add the `A2A-Extensions` activation handshake (only needed once mixing non-emergence agents).
+6. Coordinate with colleague on the UI (consumes the `emergence` payload).
