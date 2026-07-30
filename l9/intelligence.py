@@ -87,8 +87,11 @@ def coin(concept: str, lens: Lens, my_lex: dict, peer_model: dict,
          history: list[dict]) -> tuple[str, str, list[str]]:
     """Return (symbol, rationale, evidence). Symbol via deterministic ToM;
     rationale + evidence enriched by the LLM when available."""
-    proposal = signaling.propose_with_tom(dict(my_lex), dict(peer_model), history) or {}
-    symbol = proposal.get("symbol") or signaling.coin_smart(my_lex, peer_model, history)
+    # Symbol FOR this concept: reuse our own mapping if we have one, else coin a
+    # fresh symbol avoiding those already used by us and (ToM) the peer. (Do NOT
+    # use propose_with_tom here — that picks *which* concept to discuss, not a
+    # symbol for a given one; using it made prior formation reuse one symbol.)
+    symbol = my_lex.get(concept) or signaling.coin_smart(my_lex, peer_model, history)
     evidence = lens.perceived_evidence(concept)
 
     if available():
