@@ -59,8 +59,11 @@ Each agent serves an Agent Card at `/.well-known/agent-card.json` advertising th
 extension `https://outshift.io/a2a-ext/emergence/v1`; every message is the L9
 envelope in a DataPart (`media_type: application/vnd.sstp.l9+json`).
 
-Set `LLM_API_KEY` (+ `LLM_MODEL`) to switch on LLM ToM; otherwise the deterministic
-fallback runs (no LLM needed).
+**LLM ToM:** copy `.env.example` → `l9/.env` and set `OPENAI_API_KEY` (+ optional
+`OPENAI_BASE_URL` for an OpenAI-compatible gateway, `LLM_MODEL`). `l9/.env` is
+gitignored. With no key, the deterministic ToM fallback runs — same interface,
+no LLM needed. Note: a full LLM game is ~40–50 sequential calls (minutes); for a
+snappy demo, form priors deterministically and use the LLM only for negotiation.
 
 ## Files
 

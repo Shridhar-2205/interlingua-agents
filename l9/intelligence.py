@@ -15,10 +15,24 @@ from __future__ import annotations
 
 import json
 import os
+from pathlib import Path
 from typing import Optional
 
 import signaling
 from lens import Lens
+
+
+def _load_env(path: Path) -> None:
+    """Minimal .env loader (no dep). Values already in the environment win."""
+    if path.exists():
+        for line in path.read_text().splitlines():
+            line = line.strip()
+            if line and not line.startswith("#") and "=" in line:
+                k, v = line.split("=", 1)
+                os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+_load_env(Path(__file__).with_name(".env"))   # l9/.env (gitignored)
 
 _MODEL = os.environ.get("LLM_MODEL", "gpt-4o-mini")
 
@@ -28,25 +42,40 @@ def available() -> bool:
                 or os.environ.get("AZURE_OPENAI_API_KEY"))
 
 
+def _extract_json(text: str) -> dict:
+    """Parse a JSON object, tolerating ```json ... ``` fences and surrounding prose."""
+    t = (text or "").strip()
+    if t.startswith("```"):
+        t = t.split("\n", 1)[1] if "\n" in t else t[3:]
+        if t.rstrip().endswith("```"):
+            t = t.rstrip()[:-3]
+    t = t.strip()
+    try:
+        return json.loads(t)
+    except Exception:  # noqa: BLE001
+        i, j = t.find("{"), t.rfind("}")
+        return json.loads(t[i:j + 1]) if i != -1 and j > i else {}
+
+
 def _llm(system: str, user: str) -> Optional[dict]:
     """Call the LLM, expect a JSON object back. None on any failure → caller falls back."""
     try:
         import litellm
-        model = _MODEL
-        base_url = os.environ.get("LLM_API_BASE") or os.environ.get("LLM_BASE_URL")
+        base_url = (os.environ.get("LLM_API_BASE") or os.environ.get("LLM_BASE_URL")
+                    or os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE"))
         kw: dict = {
-            "model": model if not base_url or model.startswith("openai/") else f"openai/{model}",
+            "model": _MODEL,
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
             "temperature": 0.4,
-            "response_format": {"type": "json_object"},
         }
-        if os.environ.get("LLM_API_KEY"):
-            kw["api_key"] = os.environ["LLM_API_KEY"]
+        api_key = os.environ.get("LLM_API_KEY") or os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            kw["api_key"] = api_key
         if base_url:
             kw["base_url"] = base_url
         resp = litellm.completion(**kw)
-        return json.loads(resp.choices[0].message.content or "{}")
+        return _extract_json(resp.choices[0].message.content or "{}")
     except Exception as exc:  # noqa: BLE001
         print(f"  [LLM] fallback ({exc})")
         return None
