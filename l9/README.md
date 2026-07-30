@@ -84,8 +84,12 @@ snappy demo, form priors deterministically and use the LLM only for negotiation.
 ## TODO
 
 1. ~~Wire to a2a-sdk servers/clients + advertise the extension on the Agent Card.~~ ✅ done
-2. Turn on LLM ToM (creds) and widen the perception gap for a sharper genuine-vs-mimic contrast.
-3. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
-4. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.
-5. Add the `A2A-Extensions` activation handshake (only needed once mixing non-emergence agents).
-6. Coordinate with colleague on the UI (consumes the `emergence` payload).
+2. ~~Turn on LLM ToM (OpenAI-compatible gateway).~~ ✅ done
+3. **Speed up the LLM path** — full game is ~40–50 sequential calls (~5 min). Form priors
+   deterministically and use the LLM only in the negotiation loop (drops ~20 calls); optionally
+   fewer concepts / parallelize. Needed before a live demo.
+4. Widen the perception gap for a sharper genuine-vs-mimic contrast.
+5. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
+6. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.
+7. Add the `A2A-Extensions` activation handshake (only needed once mixing non-emergence agents).
+8. Coordinate with colleague on the UI (consumes the `emergence` payload).
