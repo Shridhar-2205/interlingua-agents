@@ -38,17 +38,19 @@ def adopt(lex: dict, meaning: str, symbol: str) -> None:
     lex[meaning] = symbol
 
 
-def alignment(lexicons: dict[str, dict]) -> float:
-    """Fraction of concepts where ALL agents agree (generalizes to N agents)."""
+def alignment(lexicons: dict[str, dict], meanings: Optional[list] = None) -> float:
+    """Fraction of concepts where ALL agents agree (generalizes to N agents and
+    to any object set — pass `meanings` to reuse this for a different domain)."""
+    meanings = meanings or MEANINGS
     lexes = list(lexicons.values())
     if len(lexes) < 2:
         return 0.0
     agree = 0
-    for m in MEANINGS:
+    for m in meanings:
         syms = {lx.get(m) for lx in lexes}
         if len(syms) == 1 and None not in syms:
             agree += 1
-    return agree / len(MEANINGS)
+    return agree / len(meanings)
 
 
 # ── ToM primitives (reused from feature/theory-of-mind) ────────────────────────
@@ -74,8 +76,10 @@ def predict_acceptance(meaning: str, symbol: str, peer_lex: dict, history: list[
     return 0.5
 
 
-def propose_with_tom(mine: dict, theirs: dict, history: list[dict]) -> Optional[dict]:
-    unresolved = [m for m in MEANINGS if mine.get(m) != theirs.get(m)]
+def propose_with_tom(mine: dict, theirs: dict, history: list[dict],
+                     meanings: Optional[list] = None) -> Optional[dict]:
+    meanings = meanings or MEANINGS
+    unresolved = [m for m in meanings if mine.get(m) != theirs.get(m)]
     if not unresolved:
         return None
     best, best_score = None, -1.0
