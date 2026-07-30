@@ -65,6 +65,31 @@ gitignored. With no key, the deterministic ToM fallback runs — same interface,
 no LLM needed. Note: a full LLM game is ~40–50 sequential calls (minutes); for a
 snappy demo, form priors deterministically and use the LLM only for negotiation.
 
+## Reusable: `Mind` — drop a Theory-of-Mind advisor into any A2A agent
+
+`Mind` is a **self-contained** facade (stdlib + an LLM callable you pass in; no
+dependency on the Grace/Rocky demo). Any agent can import it and call it right
+before it generates/sends a turn to go from reactive to strategic:
+
+```python
+from l9 import Mind                                  # add l9/'s parent to sys.path
+
+mind = Mind("human", OBJECTS, call_llm)              # domain + LLM injected
+mind.observe(history)                                # infer the peer's vocabulary
+messages = history + [{"role": "system",
+                       "content": mind.advise().prompt}]   # inject memory + next-move strategy
+reply = call_llm(messages)
+mind.record(reply)
+```
+
+- `observe(history)` recomputes belief from the whole conversation (stateless-friendly).
+- `advise()` → `Advice(prompt, peer_model, grounded, unresolved)`.
+- `metrics()` → `{confirmed, target, coverage, peer_model}`.
+
+Worked example: `../free_form_env/human_agent_smart.py` wires `Mind` into the
+free-form Human agent (depth A — the alien can stay dumb). Run it **instead of**
+`human_agent.py` (same port 9201) against the unchanged `alien_agent.py`.
+
 ## Files
 
 | File | Role |
