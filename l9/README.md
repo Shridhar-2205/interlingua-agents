@@ -1,0 +1,146 @@
+# interlingua-l9 — emergent convention over an A2A extension
+
+Two (then N) agents converge on a **shared symbol convention** they build from
+scratch, and we **prove the convergence is genuine, not mimicry** — using an
+**A2A extension** we define that carries L9-style epistemic structure (belief,
+evidence, grounding, Theory of Mind) on every message.
+
+Builds on:
+- `Shridhar-2205/interlingua-agents` — stateless A2A ping-pong + Lewis signaling,
+  and its `feature/theory-of-mind` branch (reused: `predict_acceptance`,
+  `propose_with_tom`, `decide_accept`, `record_outcome`, `coin_smart`).
+- `outshift-open/ioc-protocols-models` — L9 header + CIP grounding + SIEP GAR/SCR
+  (vendored lean, reimplemented for the language game).
+
+## The idea
+
+| Piece | What it is |
+|---|---|
+| **Shared world** (`world.py`) | Concepts + features both agents perceive. Grounds meaning. Symbols are NOT shared — they emerge. |
+| **Perceptual lens** (`lens.py`, axis A) | Each agent perceives a different feature slice (Grace=visual, Rocky=physical). The gap they must negotiate. |
+| **Decision policy** (`lens.py`, axis C) | `grounding_strictness` / `compliance` — the knob that turns genuine agreement into mimicry. |
+| **Theory of Mind** (`signaling.py` + `intelligence.py`) | Each agent models the peer's lexicon and reasons "what will they understand?" — the "intelligence". |
+| **A2A extension** (`l9_envelope.py`) | `https://outshift.io/a2a-ext/emergence/v1` — flat EIP envelope (`protocol`, `participants`, `message`, `context`, `type`, `data`) in a structured DataPart. |
+
+Hybrid intelligence: the LLM (via `litellm`, `intelligence.py`) does the two ToM
+judgements (coin+justify, interpret+ground); deterministic ToM is the fallback,
+so it runs with **no creds**.
+
+## Episode (L9 grammar)
+
+```
+trigger → intent → exchange:prior (each agent coins its own lexicon)
+        → exchange loop (propose → ground → adopt | contingency-repair)
+        → commit:converged → knowledge (write the shared convention)
+```
+
+Starting from **independent priors** is what makes GAR/SCR meaningful — they
+measure movement from a declared baseline.
+
+### Grounding is judged one hop after the proposal
+
+Hop 1 is Grace's proposal message — its `grounding` block is `null` because
+Grace is speaking, not judging. Hop 2 is Rocky's turn: the first thing `step()`
+does is judge hop 1's proposal, append the verdict to `history`, and only then
+build Rocky's own new proposal — which carries that updated `history` in its
+outgoing message. So the accept/reject verdict for a proposal always shows up
+in the *next* hop's message, not the proposal's own message.
+
+`history` is currently the only place on the wire showing accept/reject. Two
+gaps worth knowing about: (a) the raw `contingency_score`/`addresses_evidence`
+that `intelligence.ground()` computes are used internally but never written
+back into any message's `grounding` block — that block stays `null` everywhere
+on the wire today; (b) there's no separate "here's my verdict on your hop-1
+proposal" message — the verdict is folded into the next proposal rather than
+being its own acknowledgment. Both are legitimate follow-ups if the grounding
+math itself needs to be visible on the wire, not just the boolean outcome.
+
+## Run
+
+### In-process (no deps) — logic + metrics
+
+```bash
+python run.py            # genuine: only grounded adoptions → ~60% HONEST align, W≈1.0
+python run.py --mimic    # rocky adopts blind → 100% FAKE align but W≈0.31 (mimicry exposed)
+```
+
+The world has a perception gap: 6 concepts share an amodal feature (groundable),
+4 are split visual-vs-physical with no overlap (unshareable). Genuine agents
+converge only on what they can cross-perceive (~60%) and every adoption is real
+(W≈1.0); a mimic fakes 100% but ~half is social compliance (W≈0.31). Widen/narrow
+the gap by editing the amodal anchors in `world.py`.
+
+### Live A2A — two real agents over HTTP
+
+```bash
+pip install -r ../requirements.txt        # a2a-sdk==1.1.2, uvicorn, ...
+python rocky.py &                         # Rocky  :9102
+python grace.py &                         # Grace  :9101
+python trigger.py                         # Mission Control → prints the converged result
+```
+
+Each agent serves an Agent Card at `/.well-known/agent-card.json` advertising the
+extension `https://outshift.io/a2a-ext/emergence/v1`; every message is the L9
+envelope in a DataPart (`media_type: application/vnd.sstp.l9+json`).
+
+**LLM ToM:** copy `.env.example` → `l9/.env` and set `OPENAI_API_KEY` (+ optional
+`OPENAI_BASE_URL` for an OpenAI-compatible gateway, `LLM_MODEL`). `l9/.env` is
+gitignored. With no key, the deterministic ToM fallback runs — same interface,
+no LLM needed. Priors are formed locally (no LLM); the LLM runs only in the
+negotiation loop, so a full LLM game is ~22 sequential calls (~2 min).
+
+## Reusable: `Mind` — drop a Theory-of-Mind advisor into any A2A agent
+
+`Mind` is a **self-contained** facade (stdlib + an LLM callable you pass in; no
+dependency on the Grace/Rocky demo). Any agent can import it and call it right
+before it generates/sends a turn to go from reactive to strategic:
+
+```python
+from l9 import Mind                                  # add l9/'s parent to sys.path
+
+mind = Mind("human", OBJECTS, call_llm)              # domain + LLM injected
+mind.observe(history)                                # infer the peer's vocabulary
+messages = history + [{"role": "system",
+                       "content": mind.advise().prompt}]   # inject memory + next-move strategy
+reply = call_llm(messages)
+mind.record(reply)
+```
+
+- `observe(history)` recomputes belief from the whole conversation (stateless-friendly).
+- `advise()` → `Advice(prompt, peer_model, grounded, unresolved)`.
+- `metrics()` → `{confirmed, target, coverage, peer_model}`.
+
+Worked example: `../free_form_env/human_agent_smart.py` wires `Mind` into the
+free-form Human agent (depth A — the alien can stay dumb). Run it **instead of**
+`human_agent.py` (same port 9201) against the unchanged `alien_agent.py`.
+
+## Files
+
+| File | Role |
+|---|---|
+| `world.py` | shared concepts + features (the known environment) |
+| `lens.py` | per-agent perceptual lens (A) + decision policy (C) |
+| `signaling.py` | Lewis + ToM primitives (reused) + CIP grounding + GAR/SCR/MPC/W |
+| `intelligence.py` | LLM ToM at coin/ground, deterministic fallback |
+| `l9_models.py` | flat EIP envelope pydantic model |
+| `l9_envelope.py` | the A2A extension: URI, envelope builder, pack/unpack |
+| `agent.py` | stateless step() loop + prior formation (transport-free reasoning core) |
+| `a2a_agent.py` | A2A server+client executor + Agent Card (advertises the extension) |
+| `grace.py` / `rocky.py` | entrypoints (`:9101` / `:9102`) |
+| `trigger.py` | Mission Control — kicks off a session, prints the result |
+| `run.py` | in-process demo driver + metrics report |
+| `log_run.py` | drives a full session, logs every A2A message to `runs/<label>.{json,log}` |
+
+## TODO
+
+1. ~~Wire to a2a-sdk servers/clients + advertise the extension on the Agent Card.~~ ✅ done
+2. ~~Turn on LLM ToM (OpenAI-compatible gateway).~~ ✅ done
+3. ~~Speed up the LLM path — priors formed locally, LLM only in negotiation (~48→22 calls, ~5→2 min).~~
+   ✅ done. Further options if needed: make `ground` deterministic (CIP feature-overlap; drops ~11 more),
+   fewer concepts, or async the negotiation calls.
+4. ~~Widen the perception gap for a sharper genuine-vs-mimic contrast.~~ ✅ done
+   (4 unshareable concepts → genuine ~60% W≈1.0 vs mimic 100% W≈0.31).
+5. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
+6. Phase 2: scale to 3–6 agents (Naming Game).
+7. Add the `A2A-Extensions` activation handshake (only needed once mixing non-emergence agents).
+8. Coordinate with colleague on the UI (consumes the `emergence` payload).
