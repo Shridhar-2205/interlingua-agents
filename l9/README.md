@@ -20,7 +20,7 @@ Builds on:
 | **Perceptual lens** (`lens.py`, axis A) | Each agent perceives a different feature slice (Grace=visual, Rocky=physical). The gap they must negotiate. |
 | **Decision policy** (`lens.py`, axis C) | `grounding_strictness` / `compliance` — the knob that turns genuine agreement into mimicry. |
 | **Theory of Mind** (`signaling.py` + `intelligence.py`) | Each agent models the peer's lexicon and reasons "what will they understand?" — the "intelligence". |
-| **A2A extension** (`l9_envelope.py`) | `https://outshift.io/a2a-ext/emergence/v1` — flat EIP envelope (`protocol`, `participants`, `message`, `context`, `type`, `data`) in a structured DataPart. |
+| **A2A extension** (`l9_envelope.py`) | `https://outshift.io/a2a-ext/emergence/v1` — flat ELP envelope (`protocol`, `participants`, `message`, `context`, `type`, `data`) in a structured DataPart. |
 
 Hybrid intelligence: the LLM (via `litellm`, `intelligence.py`) does the two ToM
 judgements (coin+justify, interpret+ground); deterministic ToM is the fallback,
@@ -122,7 +122,7 @@ free-form Human agent (depth A — the alien can stay dumb). Run it **instead of
 | `lens.py` | per-agent perceptual lens (A) + decision policy (C) |
 | `signaling.py` | Lewis + ToM primitives (reused) + CIP grounding + GAR/SCR/MPC/W |
 | `intelligence.py` | LLM ToM at coin/ground, deterministic fallback |
-| `l9_models.py` | flat EIP envelope pydantic model |
+| `l9_models.py` | flat ELP envelope pydantic model |
 | `l9_envelope.py` | the A2A extension: URI, envelope builder, pack/unpack |
 | `agent.py` | stateless step() loop + prior formation (transport-free reasoning core) |
 | `a2a_agent.py` | A2A server+client executor + Agent Card (advertises the extension) |

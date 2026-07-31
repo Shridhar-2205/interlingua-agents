@@ -1,4 +1,4 @@
-"""EIP envelope model — who's speaking, episode linkage, concept, content."""
+"""ELP envelope model — who's speaking, episode linkage, concept, content."""
 from __future__ import annotations
 
 from typing import Optional
@@ -27,7 +27,7 @@ class Context(BaseModel):
 
 
 class L9(BaseModel):
-    protocol: str = "EIP"
+    protocol: str = "ELP"
     version: str = "0.1"
     participants: ParticipantSet
     message: Message

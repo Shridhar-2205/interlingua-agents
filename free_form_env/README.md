@@ -8,13 +8,13 @@ point — each one a fix for a failure in the last:
 |---|---|---|---|---|
 | **Dumb baseline** | `human_agent.py` + `alien_agent.py` | none — reactive, confused, inconsistent | free text | ~30 exchanges, unreliable (sometimes never converges) |
 | **Depth A** | `human_agent_smart.py` + `alien_agent.py` | `l9.Mind` (Theory-of-Mind advisor) on the human only | free text | **FAILED** — 0/10 confirmed in 39 exchanges: the two LLMs derailed into a mirror loop |
-| **Depth B** | `human_agent_structured.py` + `alien_agent_structured.py` | none needed | structured EIP `{object→word}` | **100% in 12 rounds**, seconds, GAR 1.0 SCR 0.0, deterministic |
+| **Depth B** | `human_agent_structured.py` + `alien_agent_structured.py` | none needed | structured ELP `{object→word}` | **100% in 12 rounds**, seconds, GAR 1.0 SCR 0.0, deterministic |
 
 Depth A shows that giving *one* agent a Theory-of-Mind advisor over free text
 isn't enough — two chatty LLMs can still spiral into copying each other's
 meta-commentary instead of naming objects (the "conversational loop" failure
 mode). Depth B removes the failure mode by construction: proposals are
-structured `{object, word}` pairs riding in an EIP DataPart, so there's no
+structured `{object, word}` pairs riding in an ELP DataPart, so there's no
 prose channel left to derail in.
 
 ## How the dumb baseline works
@@ -87,7 +87,7 @@ each other's stage directions instead of pointing at objects — Theory of Mind
 over free text doesn't remove the derailment attractor, it just gives one
 participant a better (but still ignored) strategy.
 
-### Depth B — structured EIP: fixed
+### Depth B — structured ELP: fixed
 
 12 rounds, 100% alignment, GAR 1.0, SCR 0.0, in seconds, zero LLM calls. Every
 message is `{"referent": object, "proposal": word}` — there's no prose to
@@ -169,7 +169,7 @@ python alien_agent.py &        # unchanged
 python human_agent_smart.py    # l9.Mind advisor wired in
 ```
 
-## Running — Depth B (structured EIP)
+## Running — Depth B (structured ELP)
 
 Deterministic — no LLM, no `.env` needed:
 
@@ -203,5 +203,5 @@ bumbling around in a shared environment, occasionally making sounds at each othe
 
 Depth A swaps in `l9.Mind` on the human side only (same architecture, human
 is no longer purely reactive — see `../l9/README.md` for how `Mind` works).
-Depth B replaces the free-text `Message.parts` data with the EIP envelope from
+Depth B replaces the free-text `Message.parts` data with the ELP envelope from
 `../l9/l9_envelope.py` — see that README for the wire format.
