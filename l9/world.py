@@ -16,23 +16,28 @@ from __future__ import annotations
 
 # concept -> features both agents can, in principle, perceive
 CONCEPTS: dict[str, list[str]] = {
-    "river": ["water", "flow", "nature", "cold"],
-    "sea":   ["water", "big", "salt", "nature"],
-    "fire":  ["hot", "light", "danger", "energy"],
-    "moon":  ["night", "light", "round", "sky"],
-    "star":  ["night", "light", "many", "sky"],
-    "wind":  ["air", "flow", "cold", "sky"],
-    "stone": ["hard", "heavy", "ground", "still"],
-    "tree":  ["nature", "tall", "green", "alive"],
-    "apple": ["food", "round", "red", "alive"],
-    "dance": ["motion", "joy", "rhythm", "alive"],
+    # Groundable across the gap — each has an AMODAL feature both agents perceive.
+    "river": ["shiny", "water", "flow", "nature"],
+    "sea":   ["big", "water", "salt", "nature"],
+    "tree":  ["tall", "green", "nature", "alive"],
+    "apple": ["red", "round", "food", "alive"],
+    "dance": ["motion", "energy", "joy", "alive"],
+    "fruit": ["green", "round", "food", "nature"],
+    # UNshareable across the gap — 2 visual + 2 physical, NO amodal anchor, so
+    # what Grace perceives and what Rocky perceives never overlap. Genuine agents
+    # honestly fail to align on these; a mimic adopts them anyway (→ high SCR).
+    "fire":  ["light", "bright", "hot", "energy"],
+    "moon":  ["round", "night", "cold", "still"],
+    "star":  ["bright", "many", "hot", "cold"],
+    "stone": ["dark", "shiny", "hard", "heavy"],
 }
 
 # Feature modalities — used by lens.py to give each agent a different perceptual
 # slice of the SAME world (the source of the gap they must negotiate across).
-VISUAL:   set[str] = {"light", "round", "red", "green", "tall", "big", "distant", "many", "night"}
-PHYSICAL: set[str] = {"hot", "cold", "hard", "heavy", "water", "flow", "air", "energy", "motion", "still", "salt", "invisible"}
-# features in neither modality are AMODAL — every agent perceives them (shared floor)
+VISUAL:   set[str] = {"shiny", "big", "tall", "green", "red", "round", "light", "bright", "night", "many", "dark"}
+PHYSICAL: set[str] = {"water", "flow", "salt", "motion", "energy", "hot", "cold", "still", "hard", "heavy"}
+# features in neither modality are AMODAL — every agent perceives them (shared floor):
+# nature, alive, food, joy
 
 # arbitrary sign inventory the agents draw novel symbols from
 SYMBOLS: list[str] = list("○✦≈△▽◆∿☆⬡♁∆⊚◐▣✧⋈●◇➤∞⟐⌘✺❉")

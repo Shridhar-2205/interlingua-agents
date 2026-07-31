@@ -42,9 +42,15 @@ measure movement from a declared baseline.
 ### In-process (no deps) — logic + metrics
 
 ```bash
-python run.py            # genuine: both agents ground before adopting → W≈1.0
-python run.py --mimic    # rocky adopts blind → same 100% alignment, but W drops
+python run.py            # genuine: only grounded adoptions → ~60% HONEST align, W≈1.0
+python run.py --mimic    # rocky adopts blind → 100% FAKE align but W≈0.31 (mimicry exposed)
 ```
+
+The world has a perception gap: 6 concepts share an amodal feature (groundable),
+4 are split visual-vs-physical with no overlap (unshareable). Genuine agents
+converge only on what they can cross-perceive (~60%) and every adoption is real
+(W≈1.0); a mimic fakes 100% but ~half is social compliance (W≈0.31). Widen/narrow
+the gap by editing the amodal anchors in `world.py`.
 
 ### Live A2A — two real agents over HTTP
 
@@ -113,7 +119,8 @@ free-form Human agent (depth A — the alien can stay dumb). Run it **instead of
 3. ~~Speed up the LLM path — priors formed locally, LLM only in negotiation (~48→22 calls, ~5→2 min).~~
    ✅ done. Further options if needed: make `ground` deterministic (CIP feature-overlap; drops ~11 more),
    fewer concepts, or async the negotiation calls.
-4. Widen the perception gap for a sharper genuine-vs-mimic contrast.
+4. ~~Widen the perception gap for a sharper genuine-vs-mimic contrast.~~ ✅ done
+   (4 unshareable concepts → genuine ~60% W≈1.0 vs mimic 100% W≈0.31).
 5. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
 6. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.
 7. Add the `A2A-Extensions` activation handshake (only needed once mixing non-emergence agents).
