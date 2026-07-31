@@ -34,7 +34,6 @@ import agent
 import signaling
 import l9_envelope
 from l9_envelope import EXT_URI, build_l9, to_data_part, from_a2a, agent_card_extension
-from l9_models import Kind
 
 PORTS = {"grace": 9101, "rocky": 9102}
 
@@ -53,7 +52,7 @@ def _message(l9, role, ctx: RequestContext | None = None) -> Message:
         context_id=(ctx.context_id or "") if ctx else "",
         task_id=(ctx.task_id or "") if ctx else "",
         role=role,
-        parts=[Part(text=_label(l9.payload.data)), to_data_part(l9)],
+        parts=[Part(text=_label(l9.data)), to_data_part(l9)],
         extensions=[EXT_URI],
     )
 
@@ -71,25 +70,23 @@ class EmergenceExecutor(AgentExecutor):
             episode = l9_envelope.episode_urn("session", uuid4().hex)
             parents: list[str] = []
         else:
-            state = incoming.payload.data
-            episode = incoming.header.message.episode
-            parents = [incoming.header.message.id]
+            state = incoming.data
+            episode = incoming.message.episode
+            parents = [incoming.message.id]
 
         nxt = agent.step(state, self.me)
-        subproto = "SIEP" if len(nxt["lexicons"]) > 2 else "CIP"
 
         if nxt.get("decision") == "converged":
-            out = build_l9(kind=Kind.commit, subkind="converged", sender=self.me,
-                           recipients=[self.peer_id], episode=episode, data=nxt,
-                           subprotocol=subproto, parents=parents)
+            out = build_l9(sender=self.me, recipients=[self.peer_id],
+                           episode=episode, data=nxt, parents=parents)
             print(f"[{self.me}] {_label(nxt)}")
             await event_queue.enqueue_event(_message(out, Role.ROLE_AGENT, context))
             return
 
         # Propose to the peer and await the (terminal) response, then pass it up.
-        out = build_l9(kind=Kind.exchange, sender=self.me, recipients=[self.peer_id],
+        out = build_l9(sender=self.me, recipients=[self.peer_id],
                        episode=episode, data=nxt, topic=f"concept:{nxt['referent']}",
-                       subprotocol=subproto, parents=parents)
+                       parents=parents)
         print(f"[{self.me}] {_label(nxt)} → {self.peer_id}")
 
         peer = await create_client(self.peer_url, ClientConfig(streaming=False))

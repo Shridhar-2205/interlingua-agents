@@ -40,7 +40,6 @@ from a2a.types.a2a_pb2 import AgentInterface
 import signaling
 import l9_envelope
 from l9_envelope import EXT_URI, build_l9, to_data_part, from_a2a, agent_card_extension
-from l9_models import Kind
 
 # A modest slice of the shared environment for a snappy demo (extend to all 40 freely).
 OBJECTS = ["fire", "water", "rock", "tree", "sun", "moon", "sky", "cloud", "rain", "wind", "flower", "fruit"]
@@ -119,7 +118,7 @@ def _message(l9, role, ctx: RequestContext | None = None) -> Message:
         context_id=(ctx.context_id or "") if ctx else "",
         task_id=(ctx.task_id or "") if ctx else "",
         role=role,
-        parts=[Part(text=_label(l9.payload.data)), to_data_part(l9)],
+        parts=[Part(text=_label(l9.data)), to_data_part(l9)],
         extensions=[EXT_URI],
     )
 
@@ -136,23 +135,22 @@ class EmergenceBExecutor(AgentExecutor):
             episode = l9_envelope.episode_urn("ff", uuid.uuid4().hex)
             parents: list[str] = []
         else:
-            state = incoming.payload.data
-            episode = incoming.header.message.episode
-            parents = [incoming.header.message.id]
+            state = incoming.data
+            episode = incoming.message.episode
+            parents = [incoming.message.id]
 
         nxt = step(state, self.me)
 
         if nxt.get("decision") == "converged":
-            out = build_l9(kind=Kind.commit, subkind="converged", sender=self.me,
-                           recipients=[self.peer], episode=episode, data=nxt,
-                           subprotocol="CIP", parents=parents)
+            out = build_l9(sender=self.me, recipients=[self.peer],
+                           episode=episode, data=nxt, parents=parents)
             print(f"[{self.me}] {_label(nxt)}")
             await event_queue.enqueue_event(_message(out, Role.ROLE_AGENT, context))
             return
 
-        out = build_l9(kind=Kind.exchange, sender=self.me, recipients=[self.peer],
+        out = build_l9(sender=self.me, recipients=[self.peer],
                        episode=episode, data=nxt, topic=f"object:{nxt['referent']}",
-                       subprotocol="CIP", parents=parents)
+                       parents=parents)
         print(f"[{self.me}] {_label(nxt)} -> {self.peer}")
 
         peer = await create_client(f"http://localhost:{PORTS[self.peer]}", ClientConfig(streaming=False))

@@ -27,7 +27,7 @@ async def main() -> None:
             print("MISSION CONTROL <==", text)
             l9 = from_a2a(ev.message)
             if l9:
-                d = l9.payload.data
+                d = l9.data
                 print(f"  alignment : {signaling.alignment(d['lexicons'], OBJECTS):.0%} on {len(OBJECTS)} objects")
                 print(f"  GAR / SCR : {signaling.gar(d.get('history', []))} / {signaling.scr(d.get('history', []))}")
                 print(f"  shared vocab: {d['lexicons']['human']}")

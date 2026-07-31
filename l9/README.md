@@ -20,7 +20,7 @@ Builds on:
 | **Perceptual lens** (`lens.py`, axis A) | Each agent perceives a different feature slice (Grace=visual, Rocky=physical). The gap they must negotiate. |
 | **Decision policy** (`lens.py`, axis C) | `grounding_strictness` / `compliance` — the knob that turns genuine agreement into mimicry. |
 | **Theory of Mind** (`signaling.py` + `intelligence.py`) | Each agent models the peer's lexicon and reasons "what will they understand?" — the "intelligence". |
-| **A2A extension** (`l9_envelope.py`) | `https://outshift.io/a2a-ext/emergence/v1` — lean L9 header + `emergence` payload in a structured DataPart. |
+| **A2A extension** (`l9_envelope.py`) | `https://outshift.io/a2a-ext/emergence/v1` — flat EIP envelope (`protocol`, `participants`, `message`, `context`, `type`, `data`) in a structured DataPart. |
 
 Hybrid intelligence: the LLM (via `litellm`, `intelligence.py`) does the two ToM
 judgements (coin+justify, interpret+ground); deterministic ToM is the fallback,
@@ -36,6 +36,24 @@ trigger → intent → exchange:prior (each agent coins its own lexicon)
 
 Starting from **independent priors** is what makes GAR/SCR meaningful — they
 measure movement from a declared baseline.
+
+### Grounding is judged one hop after the proposal
+
+Hop 1 is Grace's proposal message — its `grounding` block is `null` because
+Grace is speaking, not judging. Hop 2 is Rocky's turn: the first thing `step()`
+does is judge hop 1's proposal, append the verdict to `history`, and only then
+build Rocky's own new proposal — which carries that updated `history` in its
+outgoing message. So the accept/reject verdict for a proposal always shows up
+in the *next* hop's message, not the proposal's own message.
+
+`history` is currently the only place on the wire showing accept/reject. Two
+gaps worth knowing about: (a) the raw `contingency_score`/`addresses_evidence`
+that `intelligence.ground()` computes are used internally but never written
+back into any message's `grounding` block — that block stays `null` everywhere
+on the wire today; (b) there's no separate "here's my verdict on your hop-1
+proposal" message — the verdict is folded into the next proposal rather than
+being its own acknowledgment. Both are legitimate follow-ups if the grounding
+math itself needs to be visible on the wire, not just the boolean outcome.
 
 ## Run
 
@@ -104,13 +122,14 @@ free-form Human agent (depth A — the alien can stay dumb). Run it **instead of
 | `lens.py` | per-agent perceptual lens (A) + decision policy (C) |
 | `signaling.py` | Lewis + ToM primitives (reused) + CIP grounding + GAR/SCR/MPC/W |
 | `intelligence.py` | LLM ToM at coin/ground, deterministic fallback |
-| `l9_models.py` | vendored lean L9 pydantic models |
-| `l9_envelope.py` | the A2A extension: URI, header/payload builders, pack/unpack |
+| `l9_models.py` | flat EIP envelope pydantic model |
+| `l9_envelope.py` | the A2A extension: URI, envelope builder, pack/unpack |
 | `agent.py` | stateless step() loop + prior formation (transport-free reasoning core) |
 | `a2a_agent.py` | A2A server+client executor + Agent Card (advertises the extension) |
 | `grace.py` / `rocky.py` | entrypoints (`:9101` / `:9102`) |
 | `trigger.py` | Mission Control — kicks off a session, prints the result |
 | `run.py` | in-process demo driver + metrics report |
+| `log_run.py` | drives a full session, logs every A2A message to `runs/<label>.{json,log}` |
 
 ## TODO
 
@@ -122,6 +141,6 @@ free-form Human agent (depth A — the alien can stay dumb). Run it **instead of
 4. ~~Widen the perception gap for a sharper genuine-vs-mimic contrast.~~ ✅ done
    (4 unshareable concepts → genuine ~60% W≈1.0 vs mimic 100% W≈0.31).
 5. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
-6. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.
+6. Phase 2: scale to 3–6 agents (Naming Game).
 7. Add the `A2A-Extensions` activation handshake (only needed once mixing non-emergence agents).
 8. Coordinate with colleague on the UI (consumes the `emergence` payload).

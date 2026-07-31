@@ -32,7 +32,6 @@ import lens as lens_mod
 import signaling
 from a2a_agent import _message
 from l9_envelope import EXT_URI, build_l9, episode_urn, to_data_part
-from l9_models import Kind
 
 RUNS_DIR = Path(__file__).with_name("runs")
 
@@ -54,8 +53,7 @@ def drive_and_log(agents: list[str], mimic: bool, max_hops: int = 200) -> list[d
     #    hop (priors are formed locally before any message is sent), but recorded
     #    here so the log shows the starting point the negotiation measures from.
     state = agent.initial_state(agents)
-    intent = build_l9(kind=Kind.intent, sender=agents[0], recipients=agents[1:],
-                      episode=episode, data=state, subprotocol="CIP")
+    intent = build_l9(sender=agents[0], recipients=agents[1:], episode=episode, data=state)
     intent_msg = Message(
         message_id=uuid4().hex, role=Role.ROLE_USER,
         parts=[Part(text=f"session opens | priors formed independently for {agents}"),
@@ -75,18 +73,19 @@ def drive_and_log(agents: list[str], mimic: bool, max_hops: int = 200) -> list[d
         nxt = agent.step(state, me)
 
         if nxt.get("decision") == "converged":
-            l9 = build_l9(kind=Kind.commit, subkind="converged", sender=me,
-                          recipients=[peer], episode=episode, data=nxt, subprotocol="CIP")
+            l9 = build_l9(sender=me, recipients=[peer], episode=episode, data=nxt)
+            kind_str = "commit:converged"
             h = nxt.get("history", [])
             note = (f"CONVERGED | round {nxt['round']} | align {signaling.alignment(nxt['lexicons']):.0%} "
                     f"| GAR {signaling.gar(h)} SCR {signaling.scr(h)} W {signaling.provenance_weight(h)}")
         else:
-            l9 = build_l9(kind=Kind.exchange, sender=me, recipients=[peer], episode=episode,
-                          data=nxt, topic=f"concept:{nxt['referent']}", subprotocol="CIP")
+            l9 = build_l9(sender=me, recipients=[peer], episode=episode,
+                          data=nxt, topic=f"concept:{nxt['referent']}")
+            kind_str = "exchange"
             note = f"{me}: proposes '{nxt['proposal']}' for '{nxt['referent']}' -> {peer}"
 
         records.append({
-            "hop": turn + 1, "kind": str(l9.header.kind.value) + (f":{l9.header.subkind}" if l9.header.subkind else ""),
+            "hop": turn + 1, "kind": kind_str,
             "sender": me, "receiver": peer, "note": note,
             "wire_message": _wire(_message(l9, Role.ROLE_USER if nxt.get("decision") != "converged" else Role.ROLE_AGENT)),
         })

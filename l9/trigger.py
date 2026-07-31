@@ -30,8 +30,8 @@ async def main() -> None:
             print("MISSION CONTROL <==", text)
             l9 = from_a2a(ev.message)
             if l9:
-                d = l9.payload.data
-                print(f"  subprotocol : {l9.header.subprotocol}  kind : {l9.header.kind}")
+                d = l9.data
+                print(f"  protocol    : {l9.protocol}  type : {l9.type}")
                 print(f"  alignment   : {signaling.alignment(d['lexicons']):.0%}")
                 print(f"  GAR / SCR / W: {signaling.gar(d.get('history', []))} / "
                       f"{signaling.scr(d.get('history', []))} / {signaling.provenance_weight(d.get('history', []))}")

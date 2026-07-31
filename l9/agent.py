@@ -1,16 +1,11 @@
-"""Stateless A2A agent — the emergence extension over A2A ping-pong.
+"""The reasoning core, transport-free — see a2a_agent.py for the A2A server/client.
 
-Generalizes the base repo's grace_agent.py / rocky_agent.py into one executor
-parametrized by (agent_id, peer). All state travels in the L9 DataPart defined by
-l9_envelope (the extension); the agent keeps nothing between calls.
+All state travels in the emergence DataPart defined by l9_envelope; the agent
+keeps nothing between calls.
 
-Episode (L9 grammar), see README:
-    trigger → intent → exchange:prior (per agent) → exchange loop
-    (propose → ground → adopt | contingency-repair) → commit:converged → knowledge
-
-NOTE: transport wiring (a2a-sdk create_client / server routes) is marked TODO —
-the reasoning core (signaling, intelligence, l9_envelope) is fully implemented and
-unit-testable without a2a. Install a2a-sdk to run the servers.
+Episode, see README:
+    trigger → prior formation (per agent) → exchange loop
+    (propose → ground → adopt | reject) → converged
 """
 from __future__ import annotations
 
@@ -21,13 +16,8 @@ import intelligence
 import world
 from lens import Lens, BY_ID
 from l9_envelope import build_l9, episode_urn
-from l9_models import Kind
 
 MAX_ROUNDS = 60
-
-
-def _subprotocol(n_agents: int) -> str:
-    return "SIEP" if n_agents > 2 else "CIP"   # pair=CIP, population=SIEP
 
 
 def form_prior(lens: Lens) -> dict:
@@ -103,20 +93,3 @@ def initial_state(agents: list[str]) -> dict:
     lexicons = {a: form_prior(BY_ID[a]) for a in agents}
     return {"lexicons": lexicons, "round": 0, "speaker": None, "referent": None,
             "proposal": None, "history": [], "decision": "init"}
-
-
-# ── A2A transport (TODO: wire to a2a-sdk, mirroring base grace_agent.py) ────────
-#
-# def build_card(agent_id, port): AgentCard(..., capabilities=AgentCapabilities(
-#     extensions=[AgentExtension(**l9_envelope.agent_card_extension())]))
-#
-# class Executor(AgentExecutor):
-#     async def execute(self, ctx, event_queue):
-#         l9 = l9_envelope.from_a2a(ctx.message)
-#         state = l9.payload.data if l9 else initial_state([self.me, self.peer])
-#         nxt = step(state, self.me)
-#         if nxt["decision"] == "converged":
-#             out = build_l9(kind=Kind.commit, subkind="converged", ...)   # + knowledge
-#         else:
-#             out = build_l9(kind=Kind.exchange, ...); send to peer via create_client
-#         await event_queue.enqueue_event(...l9_envelope.to_data_part(out)...)

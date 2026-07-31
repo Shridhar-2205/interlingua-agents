@@ -1,9 +1,9 @@
-"""The A2A extension we define — 'emergence' — plus L9 pack/unpack.
+"""The A2A extension we define — 'emergence' — plus EIP pack/unpack.
 
 An A2A Extension = a URI advertised on the Agent Card's capabilities.extensions,
 listed in each message's `extensions`, whose payload contract we define. Ours
-carries a lean L9 envelope (l9_models) in a structured A2A DataPart, with a
-single payload type `emergence` that adds belief, evidence, grounding, a ToM
+carries a flat EIP envelope (l9_models.L9) in a structured A2A DataPart, with a
+content type `emergence` that adds belief, evidence, grounding, a ToM
 belief-model, and history to every message — so convention convergence is
 observable and measurable.
 
@@ -18,14 +18,14 @@ from __future__ import annotations
 import uuid
 from typing import Any, Optional
 
-from l9_models import L9, L9Header, L9Payload, Actor, ParticipantSet, Message, Context, Kind
+from l9_models import L9, Actor, ParticipantSet, Message, Context
 
 # ── The extension identity ─────────────────────────────────────────────────────
 EXT_URI = "https://outshift.io/a2a-ext/emergence/v1"
 EMERGENCE_PAYLOAD_TYPE = "emergence"
-MEDIA_L9 = "application/vnd.sstp.l9+json"   # DataPart media_type (self-describing)
+MEDIA_L9 = "application/vnd.eip+json"   # DataPart media_type (self-describing)
 
-# emergence payload.data schema (documented; not enforced beyond dict):
+# `data` schema (documented; not enforced beyond dict):
 #   lexicons   : {agent_id: {concept: symbol}}   full state (agents stay stateless)
 #   round      : int
 #   speaker    : agent_id
@@ -33,10 +33,13 @@ MEDIA_L9 = "application/vnd.sstp.l9+json"   # DataPart media_type (self-describi
 #   proposal   : symbol proposed
 #   utterance  : {text, evidence:[feature], addresses_evidence:[feature]}
 #   grounding  : {contingency_verified: bool, contingency_score: float, repair_reason: str|None}
+#                always null as written on the wire today — the listener's actual
+#                score/addresses_evidence are used internally (agent.step) and only
+#                surface as history[].accepted/grounded, not written back here
 #   belief     : {prior: float, posterior: float, revision_cause: str}
 #   tom        : {agent_id: {concept: symbol}}    sender's MODEL of each peer's lexicon
 #   history    : [{referent, symbol, accepted, grounded, speaker}]  the GAR/SCR event log
-#   decision   : "init" | "prior" | "propose" | "adopt" | "reject"
+#   decision   : "init" | "propose" | "converged"   (the only values agent.step produces)
 
 
 def episode_urn(concept: str, run_id: str) -> str:
@@ -45,28 +48,21 @@ def episode_urn(concept: str, run_id: str) -> str:
 
 def build_l9(
     *,
-    kind: Kind,
     sender: str,
     recipients: list[str],
     episode: str,
     data: dict,
     topic: Optional[str] = None,
-    subprotocol: str = "CIP",
-    subkind: Optional[str] = None,
     parents: Optional[list[str]] = None,
 ) -> L9:
-    """Build a lean L9 message for the emergence extension."""
+    """Build a flat EIP message for the emergence extension."""
     actors = [Actor(id=sender, role="sender")] + [Actor(id=r, role="receiver") for r in recipients]
     return L9(
-        header=L9Header(
-            subprotocol=subprotocol,
-            kind=kind,
-            subkind=subkind,
-            participants=ParticipantSet(actors=actors, groups=None),
-            message=Message(id=uuid.uuid4().hex, parents=parents or [], episode=episode),
-            context=Context(topic=topic) if topic else None,
-        ),
-        payload=L9Payload(type=EMERGENCE_PAYLOAD_TYPE, data=data),
+        participants=ParticipantSet(actors=actors, groups=None),
+        message=Message(id=uuid.uuid4().hex, parents=parents or [], episode=episode),
+        context=Context(topic=topic) if topic else None,
+        type=EMERGENCE_PAYLOAD_TYPE,
+        data=data,
     )
 
 
@@ -104,11 +100,11 @@ def agent_card_extension() -> dict:
     """Descriptor to advertise on the Agent Card's capabilities.extensions."""
     return {
         "uri": EXT_URI,
-        "description": "Emergent-convention convergence with belief/grounding/ToM (L9-over-A2A).",
+        "description": "Emergent-convention convergence with belief/grounding/ToM (EIP-over-A2A).",
         "required": False,
         "params": {
+            "protocol": "EIP",
             "payload_type": EMERGENCE_PAYLOAD_TYPE,
-            "subprotocols": ["CIP", "SIEP"],
             "carries": ["lexicons", "utterance", "grounding", "belief", "tom", "history"],
         },
     }
