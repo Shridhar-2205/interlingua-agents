@@ -1,8 +1,8 @@
-"""The A2A extension we define — 'emergence' — plus EIP pack/unpack.
+"""The A2A extension we define — 'emergence' — plus ELP pack/unpack.
 
 An A2A Extension = a URI advertised on the Agent Card's capabilities.extensions,
 listed in each message's `extensions`, whose payload contract we define. Ours
-carries a flat EIP envelope (l9_models.L9) in a structured A2A DataPart, with a
+carries a flat ELP envelope (l9_models.L9) in a structured A2A DataPart, with a
 content type `emergence` that adds belief, evidence, grounding, a ToM
 belief-model, and history to every message — so convention convergence is
 observable and measurable.
@@ -23,7 +23,7 @@ from l9_models import L9, Actor, ParticipantSet, Message, Context
 # ── The extension identity ─────────────────────────────────────────────────────
 EXT_URI = "https://outshift.io/a2a-ext/emergence/v1"
 EMERGENCE_PAYLOAD_TYPE = "emergence"
-MEDIA_L9 = "application/vnd.eip+json"   # DataPart media_type (self-describing)
+MEDIA_L9 = "application/vnd.elp+json"   # DataPart media_type (self-describing)
 
 # `data` schema (documented; not enforced beyond dict):
 #   lexicons   : {agent_id: {concept: symbol}}   full state (agents stay stateless)
@@ -55,7 +55,7 @@ def build_l9(
     topic: Optional[str] = None,
     parents: Optional[list[str]] = None,
 ) -> L9:
-    """Build a flat EIP message for the emergence extension."""
+    """Build a flat ELP message for the emergence extension."""
     actors = [Actor(id=sender, role="sender")] + [Actor(id=r, role="receiver") for r in recipients]
     return L9(
         participants=ParticipantSet(actors=actors, groups=None),
@@ -100,10 +100,10 @@ def agent_card_extension() -> dict:
     """Descriptor to advertise on the Agent Card's capabilities.extensions."""
     return {
         "uri": EXT_URI,
-        "description": "Emergent-convention convergence with belief/grounding/ToM (EIP-over-A2A).",
+        "description": "Emergent-convention convergence with belief/grounding/ToM (ELP-over-A2A).",
         "required": False,
         "params": {
-            "protocol": "EIP",
+            "protocol": "ELP",
             "payload_type": EMERGENCE_PAYLOAD_TYPE,
             "carries": ["lexicons", "utterance", "grounding", "belief", "tom", "history"],
         },
