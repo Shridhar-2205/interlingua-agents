@@ -1,15 +1,23 @@
-# Free Form Environment — Dumb Baseline
+# Free Form Environment — Dumb Baseline, Theory of Mind, and the Structured Fix
 
-Two A2A agents (Human + Alien) in a shared environment of 40 physical objects.
-They are intentionally **dumb** — confused, easily distracted, inconsistent, and
-unable to form hypotheses or track patterns. They communicate over HTTP using the
-[A2A protocol](https://github.com/google/A2A) and fumble toward shared vocabulary
-through blind repetition.
+Two A2A agents (Human + Alien) in a shared environment of 40 physical objects,
+building a shared vocabulary. Three variants, same environment, same starting
+point — each one a fix for a failure in the last:
 
-This serves as the **baseline** to prove that smarter agents (with Theory of Mind,
-belief tracking, and grounding) converge significantly faster.
+| Variant | Files | Intelligence | Wire format | Result |
+|---|---|---|---|---|
+| **Dumb baseline** | `human_agent.py` + `alien_agent.py` | none — reactive, confused, inconsistent | free text | ~30 exchanges, unreliable (sometimes never converges) |
+| **Depth A** | `human_agent_smart.py` + `alien_agent.py` | `l9.Mind` (Theory-of-Mind advisor) on the human only | free text | **FAILED** — 0/10 confirmed in 39 exchanges: the two LLMs derailed into a mirror loop |
+| **Depth B** | `human_agent_structured.py` + `alien_agent_structured.py` | none needed | structured EIP `{object→word}` | **100% in 12 rounds**, seconds, GAR 1.0 SCR 0.0, deterministic |
 
-## How it works
+Depth A shows that giving *one* agent a Theory-of-Mind advisor over free text
+isn't enough — two chatty LLMs can still spiral into copying each other's
+meta-commentary instead of naming objects (the "conversational loop" failure
+mode). Depth B removes the failure mode by construction: proposals are
+structured `{object, word}` pairs riding in an EIP DataPart, so there's no
+prose channel left to derail in.
+
+## How the dumb baseline works
 
 - **Human Agent** (port 9201): A confused English-speaking creature. Gets distracted,
   forgets previous exchanges, points at random things, sometimes lies down and stares
@@ -37,6 +45,8 @@ The human knows them by English names. The alien perceives them by description
 
 ## Results
 
+### Dumb baseline
+
 | Run | Exchanges | Outcome |
 |-----|-----------|---------|
 | 1 | 20 | 10 mappings (slow, confused convergence) |
@@ -49,7 +59,7 @@ The agents wander aimlessly, get distracted by mud, lie down under trees, stare 
 clouds, and use words inconsistently. When they do converge, it takes 3-4x longer
 than strategic agents. Sometimes they never converge at all.
 
-### Sample behavior
+Sample behavior:
 
 ```
 HUMAN: *looks around, blinking* ... *picks up stick* ... Stick?
@@ -58,6 +68,32 @@ HUMAN: *lies down in mud* ... *stares at cloud*
 ALIEN: *sits down too* ... Nuu...
 HUMAN: *yawns* ... *falls asleep*
 ```
+
+### Depth A — Mind advisor, still free text: derailed
+
+39 exchanges, 0/10 confirmed. The human (with `l9.Mind` tracking the alien's
+vocabulary) and the unchanged dumb alien fell into a mirror loop instead of
+naming objects:
+
+```
+ALIEN: *STOPS COMPLETELY*
+HUMAN: *STOPS and realizes we're in an impossible loop*
+ALIEN: *REALIZES WE JUST WROTE IDENTICAL RESPONSES AGAIN*
+HUMAN: *Sees them sit in silence*
+```
+
+A one-sided advisor can't rescue a conversation once both sides start copying
+each other's stage directions instead of pointing at objects — Theory of Mind
+over free text doesn't remove the derailment attractor, it just gives one
+participant a better (but still ignored) strategy.
+
+### Depth B — structured EIP: fixed
+
+12 rounds, 100% alignment, GAR 1.0, SCR 0.0, in seconds, zero LLM calls. Every
+message is `{"referent": object, "proposal": word}` — there's no prose to
+spiral in, so the failure mode from depth A cannot occur. The shared vocabulary
+that emerges is a genuine mix of both agents' words (e.g. `fire→fire`,
+`water→ripi`, `moon→rupo`), not one side dictating to the other.
 
 ## How state travels (A2A data part)
 
@@ -84,7 +120,7 @@ cp .env.sample .env
 # Edit .env with your real LLM_API_KEY
 ```
 
-## Running
+## Running — dumb baseline
 
 Terminal 1 — Alien agent:
 
@@ -102,18 +138,19 @@ export $(grep -v '^#' .env | xargs)
 python human_agent.py
 ```
 
-Terminal 3 — trigger:
+Terminal 3 — trigger. `message_id` is snake_case and the `A2A-Version` header
+is required — without it you get `Method not found` / `VERSION_NOT_SUPPORTED`:
 
 ```bash
 curl -s -X POST http://localhost:9201/ \
-  -H "Content-Type: application/json" \
+  -H "Content-Type: application/json" -H "A2A-Version: 1.0" \
   -d '{
     "jsonrpc": "2.0",
     "id": "1",
-    "method": "message/send",
+    "method": "SendMessage",
     "params": {
       "message": {
-        "messageId": "trigger-001",
+        "message_id": "trigger-001",
         "role": "ROLE_USER",
         "parts": [{"text": "begin"}]
       }
@@ -121,7 +158,28 @@ curl -s -X POST http://localhost:9201/ \
   }'
 ```
 
-## Architecture
+## Running — Depth A (Mind advisor)
+
+Run `human_agent_smart.py` **instead of** `human_agent.py` (same port 9201),
+against the unchanged `alien_agent.py`. Same trigger as above. Expect it to
+derail (see Results) — kept as the honest baseline that motivates Depth B.
+
+```bash
+python alien_agent.py &        # unchanged
+python human_agent_smart.py    # l9.Mind advisor wired in
+```
+
+## Running — Depth B (structured EIP)
+
+Deterministic — no LLM, no `.env` needed:
+
+```bash
+python alien_agent_structured.py &   # :9202
+python human_agent_structured.py &   # :9201
+python trigger_structured.py         # prints the converged result
+```
+
+## Architecture — dumb baseline
 
 ```
 ┌─────────────────┐         A2A/HTTP          ┌─────────────────┐
@@ -142,3 +200,8 @@ curl -s -X POST http://localhost:9201/ \
 
 No theory of mind. No belief tracking. No grounding. Just two confused creatures
 bumbling around in a shared environment, occasionally making sounds at each other.
+
+Depth A swaps in `l9.Mind` on the human side only (same architecture, human
+is no longer purely reactive — see `../l9/README.md` for how `Mind` works).
+Depth B replaces the free-text `Message.parts` data with the EIP envelope from
+`../l9/l9_envelope.py` — see that README for the wire format.
