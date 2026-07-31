@@ -62,8 +62,8 @@ envelope in a DataPart (`media_type: application/vnd.sstp.l9+json`).
 **LLM ToM:** copy `.env.example` → `l9/.env` and set `OPENAI_API_KEY` (+ optional
 `OPENAI_BASE_URL` for an OpenAI-compatible gateway, `LLM_MODEL`). `l9/.env` is
 gitignored. With no key, the deterministic ToM fallback runs — same interface,
-no LLM needed. Note: a full LLM game is ~40–50 sequential calls (minutes); for a
-snappy demo, form priors deterministically and use the LLM only for negotiation.
+no LLM needed. Priors are formed locally (no LLM); the LLM runs only in the
+negotiation loop, so a full LLM game is ~22 sequential calls (~2 min).
 
 ## Reusable: `Mind` — drop a Theory-of-Mind advisor into any A2A agent
 
@@ -110,9 +110,9 @@ free-form Human agent (depth A — the alien can stay dumb). Run it **instead of
 
 1. ~~Wire to a2a-sdk servers/clients + advertise the extension on the Agent Card.~~ ✅ done
 2. ~~Turn on LLM ToM (OpenAI-compatible gateway).~~ ✅ done
-3. **Speed up the LLM path** — full game is ~40–50 sequential calls (~5 min). Form priors
-   deterministically and use the LLM only in the negotiation loop (drops ~20 calls); optionally
-   fewer concepts / parallelize. Needed before a live demo.
+3. ~~Speed up the LLM path — priors formed locally, LLM only in negotiation (~48→22 calls, ~5→2 min).~~
+   ✅ done. Further options if needed: make `ground` deterministic (CIP feature-overlap; drops ~11 more),
+   fewer concepts, or async the negotiation calls.
 4. Widen the perception gap for a sharper genuine-vs-mimic contrast.
 5. Live `--mimic` over A2A (start Rocky with the compliant lens) for the side-by-side demo.
 6. Phase 2: scale to 3–6 agents (Naming Game); `subprotocol` switches to `SIEP`.

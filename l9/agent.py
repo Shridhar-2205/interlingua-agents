@@ -31,12 +31,18 @@ def _subprotocol(n_agents: int) -> str:
 
 
 def form_prior(lens: Lens) -> dict:
-    """exchange:prior — each agent independently coins its own starting lexicon
-    from its own perception. This declared baseline is what GAR/SCR measure from."""
+    """exchange:prior — each agent independently coins its own starting lexicon.
+    This declared baseline is what GAR/SCR measure from.
+
+    Local (no LLM) on purpose: a prior is just a distinct starting symbol per
+    concept — no proposal is being grounded yet, so there's nothing for the LLM
+    to reason about. Symbols are still randomised (independent per agent); we just
+    skip the LLM call. Reserving the LLM for the negotiation loop drops ~20 calls
+    (10 concepts x 2 agents) with zero behaviour change (form_prior only ever kept
+    the symbol; the LLM's rationale/evidence were discarded)."""
     lex: dict = {}
     for concept in world.concepts():
-        sym, _r, _e = intelligence.coin(concept, lens, lex, {}, [])
-        lex[concept] = sym
+        lex[concept] = signaling.coin_smart(lex, {}, [])
     return lex
 
 
