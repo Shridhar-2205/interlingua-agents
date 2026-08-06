@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Interlingua — Emergent Language Demo</title>
+<style>
+  :root {
+    --bg:#0b0f14; --panel:#121821; --panel2:#0e141c; --line:#223042;
+    --text:#e6edf3; --muted:#7a8899; --accent:#3ddc84; --amber:#ffb454;
+    --glyph:#b18cff; --bad:#ff6b6b; --plain:#6b7c93;
+  }
+  * { box-sizing:border-box; }
+  body {
+    margin:0; background:radial-gradient(1200px 700px at 70% -10%, #16202c 0%, var(--bg) 55%);
+    color:var(--text); font:14px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    min-height:100vh;
+  }
+  .wrap { max-width:1180px; margin:0 auto; padding:20px 22px 40px; }
+  header { display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+  h1 { font-size:20px; margin:0; letter-spacing:.2px; }
+  h1 .sub { color:var(--muted); font-weight:400; font-size:13px; display:block; margin-top:3px; }
+  .tabs { display:flex; gap:8px; }
+  .tab {
+    background:var(--panel); border:1px solid var(--line); color:var(--muted);
+    padding:8px 14px; border-radius:9px; cursor:pointer; font-weight:600; font-size:13px;
+  }
+  .tab.active { color:var(--bg); background:var(--accent); border-color:var(--accent); }
+  .tab.g.active { background:var(--glyph); border-color:var(--glyph); }
+
+  .controls {
+    display:flex; align-items:center; gap:12px; margin:16px 0 14px;
+    background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:10px 14px;
+  }
+  .controls button {
+    background:var(--panel2); border:1px solid var(--line); color:var(--text);
+    width:38px; height:34px; border-radius:8px; cursor:pointer; font-size:15px;
+  }
+  .controls button.play { width:auto; padding:0 16px; font-weight:700; color:var(--accent); }
+  .controls .round { font-variant-numeric:tabular-nums; font-weight:700; min-width:120px; }
+  .controls input[type=range] { flex:1; accent-color:var(--accent); }
+  .controls .spd { color:var(--muted); font-size:12px; }
+  .controls .armsel { display:flex; gap:6px; }
+  .controls .armsel .pill { cursor:pointer; padding:5px 10px; border-radius:20px; font-size:12px;
+    border:1px solid var(--line); background:var(--panel2); color:var(--muted); font-weight:600; }
+  .controls .armsel .pill.on { background:var(--glyph); color:var(--bg); border-color:var(--glyph); }
+
+  .grid { display:grid; grid-template-columns: 1.35fr .95fr; gap:16px; align-items:start; }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:1.2px; color:var(--muted);
+    margin:0 0 12px; display:flex; align-items:center; justify-content:space-between; }
+  .badge { font-size:11px; padding:3px 9px; border-radius:20px; font-weight:700; letter-spacing:.3px; }
+  .badge.phase { background:#1c2a1f; color:var(--accent); border:1px solid #274; }
+  .badge.plain { background:#1b2430; color:var(--plain); border:1px solid #2a3a4d; }
+  .badge.emg { background:#241c34; color:var(--glyph); border:1px solid #423; }
+
+  .msg { display:flex; gap:10px; align-items:flex-start; margin-bottom:10px; }
+  .who { font-weight:800; font-size:12px; width:52px; color:var(--muted); padding-top:8px; }
+  .bubble { flex:1; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--panel2); }
+  .bubble .lbl { font-size:11px; color:var(--muted); margin-bottom:7px; text-transform:uppercase; letter-spacing:.6px; }
+  .segs { display:flex; flex-wrap:wrap; gap:7px; }
+  .chip { padding:4px 9px; border-radius:8px; font-size:13px; border:1px solid var(--line);
+    background:#0c1219; white-space:nowrap; }
+  .chip.phrase { color:#cdd9e5; }
+  .chip.define { border-color:var(--amber); color:var(--amber); background:#241d10; }
+  .chip.refer { border-color:var(--accent); color:var(--accent); background:#0f2118; font-weight:700; }
+  .chip.code { color:var(--accent); font-weight:800; }
+  .chip.glyph { border-color:var(--glyph); color:var(--glyph); background:#191233; font-size:16px; font-weight:800; }
+  .chip .arrow { color:var(--muted); margin:0 5px; }
+  .chip .cd { color:var(--amber); font-weight:800; }
+  .chip.ok { border-color:var(--accent); color:var(--accent); background:#0f2118; }
+  .chip.no { border-color:var(--bad); color:var(--bad); background:#251214; }
+  .tok { font-variant-numeric:tabular-nums; font-weight:800; color:var(--text);
+    background:#0c1219; border:1px solid var(--line); border-radius:8px; padding:3px 9px; font-size:12px; }
+  .tok.big { color:var(--accent); }
+  .recon { color:var(--muted); font-size:12px; margin-top:8px; display:flex; gap:8px; align-items:center; }
+  .recon .ok { color:var(--accent); font-weight:700; }
+  .recon .no { color:var(--bad); font-weight:700; }
+
+  table.cb { width:100%; border-collapse:collapse; font-size:13px; }
+  table.cb td { padding:5px 6px; border-bottom:1px solid #1a2431; }
+  table.cb td.code { color:var(--accent); font-weight:800; width:44px; }
+  table.cb td.gly { color:var(--glyph); font-weight:800; width:44px; font-size:16px; }
+  table.cb tr.new td { animation:flash 1.1s ease; }
+  @keyframes flash { from { background:#274; } to { background:transparent; } }
+  .empty { color:var(--muted); font-style:italic; font-size:13px; }
+
+  .stats { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+  .stat { background:var(--panel2); border:1px solid var(--line); border-radius:10px; padding:10px; }
+  .stat .k { color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.5px; }
+  .stat .v { font-size:22px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .stat .v.g { color:var(--accent); } .stat .v.p { color:var(--plain); } .stat .v.a { color:var(--amber); }
+  .stat .v.gl { color:var(--glyph); } .stat .v.bad { color:var(--bad); }
+
+  .cov { height:9px; background:#0c1219; border:1px solid var(--line); border-radius:6px; overflow:hidden; margin-top:6px; }
+  .cov > i { display:block; height:100%; background:var(--glyph); width:0; transition:width .25s; }
+  .legend { display:flex; gap:14px; font-size:11px; color:var(--muted); margin-top:8px; flex-wrap:wrap; }
+  .legend b { display:inline-block; width:12px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+  .note { color:var(--muted); font-size:12px; margin-top:12px; line-height:1.5; }
+  svg { width:100%; height:auto; display:block; }
+  .reliable { font-weight:800; } .reliable.y { color:var(--accent); } .reliable.n { color:var(--bad); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Interlingua — Emergent Language
+      <span class="sub" id="subtitle"></span></h1>
+    <div class="tabs">
+      <div class="tab c active" data-view="compression">Compression&nbsp;(codebook)</div>
+      <div class="tab g" data-view="grounding">Grounding&nbsp;(Theory&nbsp;of&nbsp;Mind)</div>
+    </div>
+  </header>
+
+  <div class="controls">
+    <button id="reset" title="Reset">⏮</button>
+    <button id="back" title="Step back">◀</button>
+    <button id="play" class="play" title="Play/Pause">▶ Play</button>
+    <button id="fwd" title="Step forward">▶</button>
+    <span class="round" id="roundlbl">round 0</span>
+    <input type="range" id="slider" min="0" max="10" value="0" />
+    <span class="armsel" id="armsel" style="display:none"></span>
+    <span class="spd" id="spd">speed</span>
+  </div>
+
+  <div class="grid" id="grid"></div>
+</div>
+
+<script src="demo_data.js"></script>
+<script src="firstcontact_data.js"></script>
+<script>
+"use strict";
+// ---- tiny DOM helper (textContent only; no untrusted innerHTML) ----------
+function el(tag, props, children) {
+  const n = document.createElement(tag);
+  if (props) for (const k in props) {
+    if (k === "class") n.className = props[k];
+    else if (k === "text") n.textContent = props[k];
+    else if (k === "style") n.setAttribute("style", props[k]);
+    else n.setAttribute(k, props[k]);
+  }
+  (children || []).forEach(c => c && n.appendChild(typeof c === "string" ? document.createTextNode(c) : c));
+  return n;
+}
+function clear(n){ while(n.firstChild) n.removeChild(n.firstChild); }
+
+// ---- inline SVG multi-series line chart ----------------------------------
+function lineChart(series, opts) {
+  opts = opts || {};
+  const W = 440, H = 190, pad = 30;
+  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const allY = series.flatMap(s => s.data);
+  const maxY = Math.max(1, ...allY, opts.maxY || 0);
+  const maxX = Math.max(1, ...series.map(s => s.data.length - 1), opts.maxX || 1);
+  const sx = i => pad + (W - pad - 10) * (i / maxX);
+  const sy = v => H - pad - (H - pad - 12) * (v / maxY);
+  const mk = (t, a) => { const e = document.createElementNS(svg.namespaceURI, t); for (const k in a) e.setAttribute(k, a[k]); return e; };
+  // axes
+  svg.appendChild(mk("line", {x1:pad, y1:H-pad, x2:W-8, y2:H-pad, stroke:"#2a3a4d"}));
+  svg.appendChild(mk("line", {x1:pad, y1:12, x2:pad, y2:H-pad, stroke:"#2a3a4d"}));
+  [0, 0.5, 1].forEach(f => {
+    const y = sy(maxY*f);
+    const t = mk("text", {x:pad-5, y:y+3, "text-anchor":"end", fill:"#5f7086", "font-size":"9"});
+    t.textContent = Math.round(maxY*f); svg.appendChild(t);
+  });
+  // optional vertical marker (e.g., feedback dropped)
+  if (opts.marker != null && opts.marker <= maxX) {
+    const x = sx(opts.marker);
+    svg.appendChild(mk("line", {x1:x, y1:12, x2:x, y2:H-pad, stroke:"#b18cff", "stroke-dasharray":"3 3", "stroke-width":"1"}));
+    const t = mk("text", {x:x+3, y:20, fill:"#b18cff", "font-size":"9"}); t.textContent = opts.markerLabel || ""; svg.appendChild(t);
+  }
+  series.forEach(s => {
+    if (s.data.length < 1) return;
+    const pts = s.data.map((v,i) => `${sx(i)},${sy(v)}`).join(" ");
+    svg.appendChild(mk("polyline", {points:pts, fill:"none", stroke:s.color, "stroke-width":s.width||2,
+      "stroke-dasharray": s.dash||"", "stroke-linejoin":"round"}));
+    const last = s.data.length - 1;
+    svg.appendChild(mk("circle", {cx:sx(last), cy:sy(s.data[last]), r:3, fill:s.color}));
+  });
+  return svg;
+}
+function legend(items){
+  const l = el("div",{class:"legend"});
+  items.forEach(it => l.appendChild(el("span",{},[
+    el("b",{style:`background:${it.color}`}), it.label ])));
+  return l;
+}
+
+// ---- app state -----------------------------------------------------------
+const D = window.DEMO_DATA, FC = window.FC_DATA;
+const grid = document.getElementById("grid");
+const slider = document.getElementById("slider");
+const roundlbl = document.getElementById("roundlbl");
+const playBtn = document.getElementById("play");
+const armsel = document.getElementById("armsel");
+let view = "compression";
+let step = { compression:0, grounding:0 };
+let fcArm = FC.armOrder.includes("perfield+tom") ? "perfield+tom" : FC.armOrder[0];
+let playing = false, timer = null;
+const SPEED = 780;
+
+function totalFor(v){ return v === "compression" ? D.rounds.length : FC.arms[FC.armOrder[0]].rounds.length; }
+
+function setView(v){
+  view = v;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.view === v));
+  document.getElementById("title").firstChild.textContent =
+    v === "compression" ? "Interlingua — Emergent Compression " : "Interlingua — Emergent language protocol (TOM) ";
+  document.getElementById("subtitle").textContent =
+    v === "compression"
+      ? "Grace relays mission logs to Rocky. A codebook (DEFINE once → REFER forever) shrinks each message. Receiver: deterministic, lossless."
+      : "Sender speaks an OPAQUE code; Rocky must GROUND it from feedback. Theory of Mind = an explicit model of the sender's code. Receiver: " + FC.meta.receiver + ".";
+  armsel.style.display = v === "grounding" ? "flex" : "none";
+  slider.max = totalFor(v) - 1;
+  slider.value = step[v];
+  render();
+}
+function setStep(s){
+  s = Math.max(0, Math.min(totalFor(view)-1, s));
+  step[view] = s; slider.value = s;
+  render();
+}
+function render(){
+  const s = step[view];
+  roundlbl.textContent = `round ${s} / ${totalFor(view)-1}`;
+  clear(grid);
+  if (view === "compression") renderCompression(s); else renderGrounding(s);
+}
+
+// ---- COMPRESSION view ----------------------------------------------------
+function renderCompression(s){
+  const rd = D.rounds[s];
+  const left = el("div",{class:"card"});
+  const phaseBadge = { plaintext:["plain","PLAINTEXT · no code yet"],
+                       establishing:["phase","PROTOCOL · coining codes"],
+                       emerged:["emg","EMERGED LANGUAGE"] }[rd.phase];
+  left.appendChild(el("h2",{},["Transmission — Grace → Rocky",
+    el("span",{class:"badge "+phaseBadge[0], text:phaseBadge[1]})]));
+
+  // plaintext message
+  const pSegs = el("div",{class:"segs"});
+  rd.plaintext.segments.forEach(sg => pSegs.appendChild(el("span",{class:"chip phrase", text:sg.phrase})));
+  left.appendChild(el("div",{class:"msg"},[
+    el("div",{class:"who",text:"plain"}),
+    el("div",{class:"bubble"},[
+      el("div",{class:"lbl"},["Without protocol — spell every field ",
+        el("span",{class:"tok", style:"float:right", text:rd.plaintext.tokens+" tok"})]),
+      pSegs ])
+  ]));
+
+  // protocol message
+  const cSegs = el("div",{class:"segs"});
+  rd.protocol.segments.forEach(sg => {
+    if (sg.kind === "define") {
+      cSegs.appendChild(el("span",{class:"chip define"},[
+        sg.phrase, el("span",{class:"arrow",text:"→"}), el("span",{class:"cd",text:sg.code})]));
+    } else {
+      cSegs.appendChild(el("span",{class:"chip refer", title:sg.phrase, text:sg.code}));
+    }
+  });
+  left.appendChild(el("div",{class:"msg"},[
+    el("div",{class:"who",style:"color:var(--accent)",text:"Grace"}),
+    el("div",{class:"bubble"},[
+      el("div",{class:"lbl"},["With protocol — DEFINE new, REFER known ",
+        el("span",{class:"tok big", style:"float:right", text:rd.protocol.tokens+" tok"})]),
+      cSegs ])
+  ]));
+
+  left.appendChild(el("div",{class:"recon"},[
+    el("span",{class:"who",style:"width:52px",text:"Rocky"}),
+    el("span",{class:"ok",text:"✓ reconstructed exactly"}),
+    " — lossless; the codebook travels in shared state." ]));
+
+  // sidebar
+  const right = el("div",{});
+  const stat = el("div",{class:"card", style:"margin-bottom:16px"});
+  const cumSaved = rd.cumPlaintext - rd.cumProtocol;
+  const pct = Math.round(100*(1 - rd.cumProtocol/rd.cumPlaintext));
+  stat.appendChild(el("h2",{},["Token cost",
+    el("span",{class:"badge phase", text:pct+"% saved"})]));
+  stat.appendChild(el("div",{class:"stats"},[
+    statBox("plaintext total", rd.cumPlaintext, "p"),
+    statBox("protocol total", rd.cumProtocol, "g"),
+    statBox("tokens saved", cumSaved, "a"),
+    statBox("this round", rd.protocol.tokens+" / "+rd.plaintext.tokens, "g"),
+  ]));
+  const cum = D.rounds.slice(0, s+1);
+  stat.appendChild(lineChart([
+    {data: cum.map(x=>x.cumPlaintext), color:"#6b7c93", label:"plaintext"},
+    {data: cum.map(x=>x.cumProtocol), color:"#3ddc84", label:"protocol"},
+  ], {maxX: D.rounds.length-1, maxY: D.summary.totalPlaintext}));
+  stat.appendChild(legend([{color:"#6b7c93",label:"plaintext (flat)"},{color:"#3ddc84",label:"protocol (bends flat)"}]));
+  right.appendChild(stat);
+
+  const cb = el("div",{class:"card"});
+  cb.appendChild(el("h2",{},["Emerged language — codebook",
+    el("span",{class:"badge emg", text:rd.codebookAfter.length+" / "+D.summary.vocabSize})]));
+  const newCodes = new Set(rd.protocol.newCodes.map(c=>c.code));
+  if (rd.codebookAfter.length === 0) cb.appendChild(el("div",{class:"empty",text:"empty — nothing coined yet"}));
+  else {
+    const t = el("table",{class:"cb"});
+    rd.codebookAfter.forEach(c => t.appendChild(el("tr", newCodes.has(c.code)?{class:"new"}:{}, [
+      el("td",{class:"code",text:c.code}), el("td",{text:c.phrase}) ])));
+    cb.appendChild(t);
+  }
+  right.appendChild(cb);
+
+  grid.appendChild(left); grid.appendChild(right);
+}
+
+// ---- GROUNDING (ToM) view ------------------------------------------------
+function renderGrounding(s){
+  const arm = FC.arms[fcArm];
+  const rd = arm.rounds[s];
+  const F = FC.meta.fields, L = FC.meta.fieldLabels;
+
+  const left = el("div",{class:"card"});
+  const winBadge = rd.win ? el("span",{class:"badge phase",text:"MATCH"})
+                          : el("span",{class:"badge plain",text:rd.hits+"/"+F.length+" fields"});
+  left.appendChild(el("h2",{},["Transmission — Sender → Rocky", winBadge]));
+
+  // opaque wire
+  const wSegs = el("div",{class:"segs"});
+  F.forEach(f => wSegs.appendChild(el("span",{class:"chip glyph", title:L[f], text:rd.symbols[f]})));
+  left.appendChild(el("div",{class:"msg"},[
+    el("div",{class:"who",style:"color:var(--glyph)",text:"Sender"}),
+    el("div",{class:"bubble"},[
+      el("div",{class:"lbl"},["Opaque code — meaning NOT transmitted ",
+        el("span",{class:"tok big", style:"float:right", text:rd.wireTokens+" tok"})]),
+      wSegs ])
+  ]));
+
+  // receiver guess with per-field correctness
+  const gSegs = el("div",{class:"segs"});
+  F.forEach(f => gSegs.appendChild(el("span",{class:"chip "+(rd.correct[f]?"ok":"no")},
+    [ (rd.correct[f]?"✓ ":"✗ ")+rd.guess[f] ])));
+  left.appendChild(el("div",{class:"msg"},[
+    el("div",{class:"who",text:"Rocky"}),
+    el("div",{class:"bubble"},[ el("div",{class:"lbl",text:"Reconstruction guess"}), gSegs ])
+  ]));
+
+  // feedback side-channel
+  const fb = el("div",{class:"bubble"});
+  if (rd.feedbackActive) {
+    const fSegs = el("div",{class:"segs"});
+    F.forEach(f => fSegs.appendChild(el("span",{class:"chip "+(rd.correct[f]?"ok":"no"),
+      text:(L[f]+": "+(rd.correct[f]?"right":"wrong"))})));
+    fb.appendChild(el("div",{class:"lbl"},["Protocol feedback (confirm) ",
+      el("span",{class:"tok",style:"float:right",text:rd.feedbackTokens+" tok"})]));
+    fb.appendChild(fSegs);
+  } else {
+    fb.appendChild(el("div",{class:"lbl"},["Protocol feedback ",
+      el("span",{class:"tok",style:"float:right;color:var(--accent)",text:"0 tok"})]));
+    fb.appendChild(el("div",{class:"empty",text:"✓ grounded — feedback channel switched OFF (bare wire only)"}));
+  }
+  left.appendChild(el("div",{class:"msg"},[ el("div",{class:"who",text:"channel"}), fb ]));
+
+  // sidebar
+  const right = el("div",{});
+  const stat = el("div",{class:"card", style:"margin-bottom:16px"});
+  const relBadge = arm.reliable ? el("span",{class:"badge phase",text:"reliable"})
+                                : el("span",{class:"badge plain",style:"color:var(--bad);border-color:var(--bad)",text:"never reliable"});
+  stat.appendChild(el("h2",{},["Token cost — to reliable comms", relBadge]));
+  const gAt = arm.groundedAt;
+  stat.appendChild(el("div",{class:"stats"},[
+    statBox("effective total", rd.cumEffective, arm.tom?"gl":"bad"),
+    statBox("plaintext total", rd.cumPlaintext, "p"),
+    statBox("grounded @", gAt==null?"never":("round "+gAt), arm.tom?"gl":"bad"),
+    statBox("proj. "+FC.meta.horizon+" rounds", arm.summary.projTokens, arm.tom?"g":"bad"),
+  ]));
+  // both arms' cumulative effective cost + plaintext baseline
+  const upto = i => FC.arms[i].rounds.slice(0, s+1).map(x=>x.cumEffective);
+  const series = FC.armOrder.map(a => ({
+    data: upto(a),
+    color: a.includes("tom") ? "#b18cff" : "#ff6b6b",
+    label: a
+  }));
+  series.push({ data: FC.arms[FC.armOrder[0]].rounds.slice(0,s+1).map(x=>x.cumPlaintext),
+                color:"#6b7c93", dash:"4 3", label:"plaintext" });
+  const tomArm = FC.armOrder.find(a=>a.includes("tom"));
+  stat.appendChild(lineChart(series, {
+    maxX: arm.rounds.length-1,
+    maxY: Math.max(FC.arms[FC.armOrder[0]].rounds.at(-1).cumPlaintext,
+                   ...FC.armOrder.map(a=>FC.arms[a].rounds.at(-1).cumEffective)),
+    marker: tomArm ? FC.arms[tomArm].groundedAt : null, markerLabel:"feedback off"
+  }));
+  stat.appendChild(legend([
+    {color:"#b18cff",label:"perfield+tom"},{color:"#ff6b6b",label:"perfield"},{color:"#6b7c93",label:"plaintext"}]));
+  right.appendChild(stat);
+
+  // Theory of Mind peer model
+  const tom = el("div",{class:"card"});
+  tom.appendChild(el("h2",{},["Theory of Mind — sender's code",
+    el("span",{class:"badge emg", text: Math.round((rd.coverage||0)*100)+"% grounded"})]));
+  if (!arm.tom) {
+    tom.appendChild(el("div",{class:"empty",text:"No ToM model — the receiver reasons reactively, round by round, and never locks the full code."}));
+  } else if (rd.peerModel.length === 0) {
+    tom.appendChild(el("div",{class:"empty",text:"empty — nothing grounded yet"}));
+  } else {
+    const t = el("table",{class:"cb"});
+    rd.peerModel.forEach(p => t.appendChild(el("tr",{},[
+      el("td",{class:"gly",text:p.symbol}), el("td",{text:p.phrase}),
+      el("td",{style:"color:var(--muted);font-size:11px",text:p.label}) ])));
+    tom.appendChild(t);
+    const bar = el("div",{class:"cov"}); bar.appendChild(el("i",{style:`width:${(rd.coverage||0)*100}%`}));
+    tom.appendChild(bar);
+  }
+  right.appendChild(tom);
+
+  grid.appendChild(left); grid.appendChild(right);
+}
+
+function statBox(k, v, cls){
+  return el("div",{class:"stat"},[ el("div",{class:"k",text:k}), el("div",{class:"v "+(cls||""),text:String(v)}) ]);
+}
+
+// ---- arm selector (grounding) --------------------------------------------
+function buildArmSel(){
+  clear(armsel);
+  FC.armOrder.forEach(a => {
+    const p = el("span",{class:"pill"+(a===fcArm?" on":""),text:a});
+    p.addEventListener("click", ()=>{ fcArm=a; buildArmSel(); render(); });
+    armsel.appendChild(p);
+  });
+}
+
+// ---- playback ------------------------------------------------------------
+function play(){
+  playing = !playing;
+  playBtn.textContent = playing ? "⏸ Pause" : "▶ Play";
+  if (playing) {
+    if (step[view] >= totalFor(view)-1) setStep(0);
+    timer = setInterval(()=>{
+      if (step[view] >= totalFor(view)-1) { stop(); return; }
+      setStep(step[view]+1);
+    }, SPEED);
+  } else stop();
+}
+function stop(){ playing=false; playBtn.textContent="▶ Play"; if(timer){clearInterval(timer);timer=null;} }
+
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", ()=>{ stop(); setView(t.dataset.view); }));
+document.getElementById("reset").addEventListener("click", ()=>{ stop(); setStep(0); });
+document.getElementById("back").addEventListener("click", ()=>{ stop(); setStep(step[view]-1); });
+document.getElementById("fwd").addEventListener("click", ()=>{ stop(); setStep(step[view]+1); });
+playBtn.addEventListener("click", play);
+slider.addEventListener("input", ()=>{ stop(); setStep(parseInt(slider.value,10)); });
+
+document.getElementById("spd").textContent = (1000/SPEED).toFixed(1)+"×";
+buildArmSel();
+// Optional deep-link for screenshots/demos: ?view=grounding&arm=perfield+tom&round=12
+const qs = new URLSearchParams(location.search);
+if (qs.get("arm") && FC.armOrder.includes(qs.get("arm"))) fcArm = qs.get("arm");
+buildArmSel();
+setView(qs.get("view") === "grounding" ? "grounding" : "compression");
+if (qs.get("round") != null) setStep(parseInt(qs.get("round"), 10) || 0);
+</script>
+</body>
+</html>
