@@ -1,0 +1,527 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scenario Comparison — Free-Form vs ELP</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#05070f; --cyan:#38bdf8; --amber:#fbbf24; --emerald:#34d399; --rose:#f43f5e; --violet:#a78bfa; --line:rgba(148,163,184,.14); }
+  html{ scroll-behavior:smooth; }
+  body{
+    font-family:'Inter',ui-sans-serif,system-ui,sans-serif;
+    background:
+      radial-gradient(1200px 700px at 78% -8%, rgba(56,189,248,.08), transparent 60%),
+      radial-gradient(1000px 600px at 12% 108%, rgba(251,191,36,.06), transparent 60%),
+      var(--bg);
+    color:#e2e8f0; min-height:100vh;
+  }
+  body::after{ content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
+    box-shadow: inset 0 0 180px 20px rgba(0,0,0,.45); }
+  .wrap{ position:relative; z-index:1; }
+  h1,h2,h3,.display{ font-family:'Space Grotesk','Inter',sans-serif; }
+  .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+  .glass{ background: linear-gradient(180deg, rgba(15,22,38,.74), rgba(9,13,24,.68));
+    border:1px solid var(--line); border-radius:16px; backdrop-filter: blur(10px);
+    box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 12px 40px rgba(0,0,0,.45); }
+
+  .grad{ background:linear-gradient(90deg,#7dd3fc,#e0f2fe,#fcd34d,#7dd3fc);
+    background-size:300% 100%; -webkit-background-clip:text; background-clip:text; color:transparent;
+    animation:grad 8s linear infinite; }
+  @keyframes grad{ to{ background-position:300% 0; } }
+
+  .btn-run{ background:linear-gradient(90deg,#22d3ee,#38bdf8); color:#04121c; font-weight:700;
+    box-shadow:0 6px 20px rgba(56,189,248,.35); transition:transform .15s ease, box-shadow .2s ease; border-radius:10px; padding:10px 24px; cursor:pointer; }
+  .btn-run:hover{ transform:translateY(-1px); box-shadow:0 10px 28px rgba(56,189,248,.5); }
+  .btn-run:disabled{ filter:grayscale(.4) brightness(.8); box-shadow:none; cursor:not-allowed; }
+  .btn-run:active{ transform:scale(.97); }
+
+  .agent-block{ border-radius:12px; padding:16px; position:relative; min-width:180px; }
+  .agent-block.alpha{ background:rgba(56,189,248,.08); border:1px solid rgba(56,189,248,.3); }
+  .agent-block.beta{ background:rgba(251,191,36,.08); border:1px solid rgba(251,191,36,.3); }
+
+  .beam-line{ height:2px; flex:1; position:relative; overflow:visible; margin:0 8px; }
+  .beam-line.active{ background:linear-gradient(90deg, rgba(56,189,248,.6), rgba(251,191,36,.6)); }
+  .beam-line.idle{ background:rgba(148,163,184,.15); }
+  .beam-line.active::after{ content:""; position:absolute; width:30%; height:100%; top:0;
+    background:linear-gradient(90deg, transparent, white, transparent);
+    animation:sweep 1.5s linear infinite; }
+  @keyframes sweep{ from{left:-30%;} to{left:100%;} }
+
+  .packet{ position:absolute; top:-10px; background:rgba(15,22,38,.9); border:1px solid rgba(56,189,248,.5);
+    border-radius:6px; padding:2px 6px; font-size:9px; color:#7dd3fc; white-space:nowrap;
+    animation:packetMove 1s ease-in-out; }
+  @keyframes packetMove{ from{left:10%; opacity:0;} to{left:60%; opacity:1;} }
+
+  .log-area{ overflow-y:auto; max-height:300px; padding:10px; font-size:11px; line-height:1.7; }
+  .log-area::-webkit-scrollbar{ width:5px; }
+  .log-area::-webkit-scrollbar-thumb{ background:rgba(148,163,184,.2); border-radius:3px; }
+
+  .log-line{ animation:fadeIn .3s ease both; padding:2px 0; }
+  @keyframes fadeIn{ from{opacity:0; transform:translateY(4px);} to{opacity:1; transform:none;} }
+
+  .badge-ff{ background:rgba(244,63,94,.12); color:#fb7185; border:1px solid rgba(244,63,94,.25); }
+  .badge-elp{ background:rgba(52,211,153,.12); color:#6ee7b7; border:1px solid rgba(52,211,153,.25); }
+
+  .metric-box{ background:rgba(15,22,38,.6); border:1px solid var(--line); border-radius:10px; padding:10px 14px; text-align:center; }
+  .metric-val{ font-size:24px; font-weight:700; line-height:1.2; }
+  .metric-label{ font-size:9px; text-transform:uppercase; letter-spacing:.12em; color:#94a3b8; margin-top:2px; }
+
+  .spinner{ width:14px; height:14px; border:2px solid rgba(255,255,255,.2); border-top-color:#38bdf8;
+    border-radius:50%; animation:spin .6s linear infinite; display:inline-block; vertical-align:middle; }
+  @keyframes spin{ to{transform:rotate(360deg);} }
+
+  .status-dot{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+  .status-dot.running{ background:#38bdf8; animation:pulse 1s ease infinite; }
+  .status-dot.done{ background:#34d399; }
+  .status-dot.failed{ background:#f43f5e; }
+  .status-dot.idle{ background:#475569; }
+  @keyframes pulse{ 0%,100%{opacity:1;} 50%{opacity:.4;} }
+
+  .msg-sample{ background:rgba(15,22,38,.5); border:1px solid var(--line); border-radius:8px;
+    padding:10px 12px; font-size:10px; line-height:1.5; overflow-x:auto; }
+  .msg-sample pre{ margin:0; white-space:pre-wrap; word-break:break-all; }
+
+  .comparison-bar{ height:10px; border-radius:5px; background:rgba(30,41,59,.6); overflow:hidden; }
+  .comparison-fill{ height:100%; border-radius:5px; transition:width .5s cubic-bezier(.4,1,.3,1); }
+
+  .card-field{ display:flex; gap:6px; padding:3px 0; border-bottom:1px solid rgba(148,163,184,.06); }
+  .card-field:last-child{ border-bottom:none; }
+  .card-key{ color:#64748b; font-size:9px; min-width:60px; text-transform:uppercase; letter-spacing:.05em; }
+  .card-val{ color:#cbd5e1; font-size:10px; }
+</style>
+</head>
+<body>
+<div class="wrap w-full px-4 py-6">
+
+  <!-- Header -->
+  <header class="text-center mb-6">
+    <p class="text-[10px] uppercase tracking-[.2em] text-slate-500 mb-1">A2A Agent-to-Agent Scenario Comparison</p>
+    <h1 class="text-2xl md:text-3xl font-bold grad">Free-Form A2A vs ELP-over-A2A</h1>
+    <p class="text-slate-400 mt-2 max-w-2xl mx-auto text-xs">
+      Same task, same environment, same 30-round cap. Two A2A agents building a shared vocabulary over HTTP/JSONRPC.
+      Compare raw LLM chat (plain A2A text) against structured ELP envelope with Theory of Mind + grounding.
+    </p>
+  </header>
+
+  <!-- Controls -->
+  <div class="flex justify-center items-center gap-4 mb-6">
+    <button id="btnRunBoth" class="btn-run text-sm" onclick="runBoth()">Run Both Scenarios</button>
+  </div>
+
+  <!-- ═══════════════════ SIDE BY SIDE ═══════════════════ -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+
+    <!-- ──── LEFT: FREE-FORM ──── -->
+    <div>
+      <div class="flex items-center gap-3 mb-3">
+        <span class="status-dot idle" id="ffDot"></span>
+        <h2 class="text-lg font-semibold">Free-Form A2A</h2>
+        <span class="badge-ff text-[10px] px-2 py-0.5 rounded-full font-medium">Plain A2A · LLM Only</span>
+      </div>
+
+      <!-- Architecture -->
+      <div class="glass p-4 mb-3">
+        <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Architecture</p>
+        <div class="flex items-center justify-center gap-3">
+          <div class="agent-block alpha">
+            <div class="text-cyan-400 font-semibold text-xs">Alpha</div>
+            <div class="text-[9px] text-slate-400 mono">:9301</div>
+            <div class="text-[9px] text-slate-500 mt-1">English · LLM · No ToM</div>
+          </div>
+          <div class="flex flex-col items-center flex-1 max-w-[140px]">
+            <div class="text-[8px] text-slate-500 mb-1">A2A JSONRPC / HTTP</div>
+            <div class="beam-line idle w-full" id="ffBeam"></div>
+            <div class="text-[8px] text-slate-600 mt-1">SendMessage (text parts)</div>
+          </div>
+          <div class="agent-block beta">
+            <div class="text-amber-400 font-semibold text-xs">Beta</div>
+            <div class="text-[9px] text-slate-400 mono">:9302</div>
+            <div class="text-[9px] text-slate-500 mt-1">Alien · LLM · Inconsistent</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Cards + Sample (dynamic) -->
+      <div class="grid grid-cols-3 gap-3 mb-3" id="ffAgentCards">
+        <div class="glass p-3" id="ffAlphaCard"></div>
+        <div class="glass p-3" id="ffSampleMsg"></div>
+        <div class="glass p-3" id="ffBetaCard"></div>
+      </div>
+
+      <!-- Log + Metrics -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="glass col-span-2 p-3">
+          <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Live Log</p>
+          <div class="log-area" id="ffLog"><p class="text-slate-600 italic text-xs">Click "Run Both Scenarios" to start</p></div>
+        </div>
+        <div class="glass p-3 flex flex-col justify-center">
+          <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Metrics</p>
+          <div class="grid grid-cols-1 gap-2">
+            <div class="metric-box"><div class="metric-val text-rose-400 text-lg" id="ffRounds">—</div><div class="metric-label">Rounds</div></div>
+            <div class="metric-box"><div class="metric-val text-rose-400 text-lg" id="ffAlign">—</div><div class="metric-label">Alignment</div></div>
+            <div class="metric-box"><div class="metric-val text-rose-400 text-lg" id="ffStatus">—</div><div class="metric-label">Result</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──── RIGHT: ELP ──── -->
+    <div>
+      <div class="flex items-center gap-3 mb-3">
+        <span class="status-dot idle" id="elpDot"></span>
+        <h2 class="text-lg font-semibold">ELP-over-A2A + ToM</h2>
+        <span class="badge-elp text-[10px] px-2 py-0.5 rounded-full font-medium">A2A + ELP Envelope · Structured</span>
+      </div>
+
+      <!-- Architecture -->
+      <div class="glass p-4 mb-3">
+        <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Architecture</p>
+        <div class="flex items-center justify-center gap-3">
+          <div class="agent-block alpha">
+            <div class="text-cyan-400 font-semibold text-xs">Alpha</div>
+            <div class="text-[9px] text-slate-400 mono">:9401</div>
+            <div class="text-[9px] text-emerald-400 mt-1">ToM + signaling</div>
+            <div class="text-[9px] text-slate-500">lens: VISUAL</div>
+            <div class="mt-1 pt-1 border-t border-cyan-900/30">
+              <div class="text-[8px] text-cyan-300">Actor{alpha, sender}</div>
+            </div>
+          </div>
+          <div class="flex flex-col items-center flex-1 max-w-[160px]">
+            <div class="text-[8px] text-emerald-500 mb-1">A2A JSONRPC / HTTP</div>
+            <div class="beam-line idle w-full" id="elpBeam"></div>
+            <div class="text-[8px] text-slate-400 mt-1 mono">SendMessage (ELP data part)</div>
+            <div class="text-[7px] text-violet-400 mt-0.5">application/vnd.elp+json</div>
+          </div>
+          <div class="agent-block beta">
+            <div class="text-amber-400 font-semibold text-xs">Beta</div>
+            <div class="text-[9px] text-slate-400 mono">:9402</div>
+            <div class="text-[9px] text-emerald-400 mt-1">ToM + signaling</div>
+            <div class="text-[9px] text-slate-500">lens: PHYSICAL</div>
+            <div class="mt-1 pt-1 border-t border-amber-900/30">
+              <div class="text-[8px] text-amber-300">Actor{beta, receiver}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Agent Cards + Sample (dynamic) -->
+      <div class="grid grid-cols-2 gap-3 mb-3" id="elpAgentCards">
+        <div class="glass p-3" id="elpCardsPanel"></div>
+        <div class="glass p-3" id="elpSampleMsg"></div>
+      </div>
+
+      <!-- Log + Metrics -->
+      <div class="grid grid-cols-3 gap-3">
+        <div class="glass col-span-2 p-3">
+          <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Live Log</p>
+          <div class="log-area" id="elpLog"><p class="text-slate-600 italic text-xs">Click "Run Both Scenarios" to start</p></div>
+        </div>
+        <div class="glass p-3 flex flex-col justify-center">
+          <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Metrics</p>
+          <div class="grid grid-cols-1 gap-2">
+            <div class="metric-box"><div class="metric-val text-emerald-400 text-lg" id="elpRounds">—</div><div class="metric-label">Rounds</div></div>
+            <div class="metric-box"><div class="metric-val text-emerald-400 text-lg" id="elpAlign">—</div><div class="metric-label">Alignment</div></div>
+            <div class="metric-box"><div class="metric-val text-emerald-400 text-lg" id="elpStatus">—</div><div class="metric-label">Result</div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end side-by-side grid -->
+
+  <!-- ═══════════════════ COMPARISON ═══════════════════ -->
+  <section class="mb-6" id="comparisonSection" style="display:none;">
+    <div class="glass p-5">
+      <h3 class="text-lg font-semibold mb-4 text-center">Final Comparison</h3>
+      <div>
+        <div class="flex justify-between text-xs mb-2">
+          <span class="text-slate-400">Alignment Achieved</span>
+          <span class="mono text-sm"><span class="text-rose-400" id="cmpFFAlign">0%</span> vs <span class="text-emerald-400" id="cmpELPAlign">0%</span></span>
+        </div>
+        <div class="flex gap-2 items-center">
+          <span class="text-[9px] text-rose-400 w-14">Free-Form</span>
+          <div class="comparison-bar flex-1"><div class="comparison-fill bg-rose-500" id="barFF" style="width:0%"></div></div>
+        </div>
+        <div class="flex gap-2 items-center mt-2">
+          <span class="text-[9px] text-emerald-400 w-14">ELP</span>
+          <div class="comparison-bar flex-1"><div class="comparison-fill bg-emerald-500" id="barELP" style="width:0%"></div></div>
+        </div>
+      </div>
+      <div class="mt-4 p-3 rounded-lg bg-emerald-950/30 border border-emerald-800/30 text-center">
+        <p class="text-emerald-300 font-medium text-sm" id="verdict"></p>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="text-center text-xs text-slate-600 py-4 space-y-1">
+    <p>Both scenarios use <span class="text-slate-400">A2A (Agent-to-Agent)</span> protocol — HTTP/JSONRPC with SendMessage RPC</p>
+    <p class="text-slate-700">ELP adds a structured data part (application/vnd.elp+json) carrying participants, message linkage, and emergence payload</p>
+  </footer>
+</div>
+
+<script>
+let ffResult = null, elpResult = null;
+
+// ── Dynamic agent info from server ──────────────────────────────────────────
+(async function loadAgentInfo() {
+  try {
+    const resp = await fetch('/api/agents');
+    const info = await resp.json();
+    renderFFCards(info.free_form);
+    renderELPCards(info.elp);
+  } catch (e) { console.warn('Could not load agent info:', e); }
+})();
+
+function renderCardFields(card, compact) {
+  const url = card.url || '';
+  const port = url.match(/:(\d+)/)?.[1] || '';
+  const skills = (card.skills || []).map(s => s.id).join(', ') || 'None';
+  const exts = (card.extensions || []);
+  const extText = exts.length ? exts.map(e => e.uri?.split('/').pop() || 'Yes').join(', ') : 'None';
+  const extClass = exts.length ? 'text-emerald-400 text-[9px]' : 'text-slate-600';
+  if (compact) {
+    return `
+      <div class="card-field"><span class="card-key">Port</span><span class="card-val mono">${esc(port)}</span></div>
+      <div class="card-field"><span class="card-key">Skills</span><span class="card-val">${esc(skills)}</span></div>
+      <div class="card-field"><span class="card-key">Ext</span><span class="card-val ${extClass}">${esc(extText)}</span></div>
+    `;
+  }
+  return `
+    <div class="card-field"><span class="card-key">Name</span><span class="card-val">${esc(card.name)}</span></div>
+    <div class="card-field"><span class="card-key">Protocol</span><span class="card-val">${esc(card.protocol_binding || 'JSONRPC')}</span></div>
+    <div class="card-field"><span class="card-key">Port</span><span class="card-val mono">${esc(port)}</span></div>
+    <div class="card-field"><span class="card-key">Skills</span><span class="card-val">${esc(skills)}</span></div>
+    <div class="card-field"><span class="card-key">Ext</span><span class="card-val ${extClass}">${esc(extText)}</span></div>
+  `;
+}
+
+function renderFFCards(ff) {
+  const alphaCard = ff.alpha.card;
+  const betaCard = ff.beta.card;
+  const sample = ff.alpha.sample_message;
+  const cleanSample = {...sample};
+  delete cleanSample._note;
+
+  document.getElementById('ffAlphaCard').innerHTML = `
+    <p class="text-[9px] uppercase tracking-widest text-cyan-500 mb-2">A2A Agent Card — Alpha</p>
+    ${renderCardFields(alphaCard, true)}
+  `;
+  document.getElementById('ffBetaCard').innerHTML = `
+    <p class="text-[9px] uppercase tracking-widest text-amber-500 mb-2">A2A Agent Card — Beta</p>
+    ${renderCardFields(betaCard, true)}
+  `;
+  document.getElementById('ffSampleMsg').innerHTML = `
+    <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">A2A SendMessage</p>
+    <div class="msg-sample"><pre class="text-slate-300">${syntaxHighlight(cleanSample)}
+<span class="text-rose-400/70">// ${sample._note}</span></pre></div>
+  `;
+}
+
+function renderELPCards(elp) {
+  const alphaCard = elp.alpha.card;
+  const betaCard = elp.beta.card;
+  const sample = elp.alpha.sample_message;
+  const l9Model = elp.l9_model;
+
+  let modelHtml = '';
+  for (const [name, spec] of Object.entries(l9Model)) {
+    const fields = Object.entries(spec.fields).map(([k,v]) => `${k}: ${v}`).join(', ');
+    const isTop = name === 'L9';
+    const cls = isTop ? 'text-emerald-300' : 'text-violet-300';
+    const span = isTop ? 'col-span-2' : '';
+    modelHtml += `<div class="${span}"><span class="${cls}">${esc(name)}</span> <span class="text-slate-500">— {${esc(fields)}}</span></div>`;
+  }
+
+  document.getElementById('elpCardsPanel').innerHTML = `
+    <div class="grid grid-cols-2 gap-3">
+      <div>
+        <p class="text-[9px] uppercase tracking-widest text-cyan-500 mb-2">A2A Card — Alpha</p>
+        ${renderCardFields(alphaCard, true)}
+      </div>
+      <div>
+        <p class="text-[9px] uppercase tracking-widest text-amber-500 mb-2">A2A Card — Beta</p>
+        ${renderCardFields(betaCard, true)}
+      </div>
+    </div>
+    <div class="mt-2 pt-2 border-t border-slate-800/50">
+      <p class="text-[9px] uppercase tracking-widest text-violet-400 mb-1">L9 Model</p>
+      <div class="grid grid-cols-2 gap-x-3 gap-y-0.5 text-[9px]">${modelHtml}</div>
+    </div>
+  `;
+
+  document.getElementById('elpSampleMsg').innerHTML = `
+    <p class="text-[9px] uppercase tracking-widest text-emerald-500 mb-2">A2A SendMessage + ELP</p>
+    <div class="msg-sample"><pre class="text-slate-300">${syntaxHighlight(sample)}</pre></div>
+  `;
+}
+
+function syntaxHighlight(obj) {
+  const json = JSON.stringify(obj, null, 2);
+  return json.replace(/"([^"]+)":/g, '<span class="text-cyan-400">"$1"</span>:')
+             .replace(/: "([^"]+)"/g, ': <span class="text-slate-300">"$1"</span>')
+             .replace(/: (\d+\.?\d*)/g, ': <span class="text-amber-300">$1</span>')
+             .replace(/: (true|false|null)/g, ': <span class="text-violet-300">$1</span>');
+}
+
+function resetPanel(id) {
+  document.getElementById(id + 'Log').innerHTML = '<p class="text-slate-500 text-xs"><span class="spinner"></span> Starting agents...</p>';
+  document.getElementById(id + 'Dot').className = 'status-dot running';
+  const beam = document.getElementById(id + 'Beam');
+  if (beam) { beam.className = 'beam-line active w-full'; }
+  if (id === 'ff') {
+    document.getElementById('ffRounds').textContent = '—';
+    document.getElementById('ffAlign').textContent = '—';
+    document.getElementById('ffStatus').textContent = '—';
+  } else {
+    document.getElementById('elpRounds').textContent = '—';
+    document.getElementById('elpAlign').textContent = '—';
+    document.getElementById('elpStatus').textContent = '—';
+  }
+}
+
+function finishPanel(id, success) {
+  document.getElementById(id + 'Dot').className = success ? 'status-dot done' : 'status-dot failed';
+  const beam = document.getElementById(id + 'Beam');
+  if (beam) { beam.className = 'beam-line idle w-full'; }
+}
+
+function addLog(panelId, text) {
+  const log = document.getElementById(panelId + 'Log');
+  if (log.querySelector('.italic')) log.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'log-line';
+  div.innerHTML = formatLog(text);
+  log.appendChild(div);
+  log.scrollTop = log.scrollHeight;
+}
+
+function formatLog(text) {
+  if (text.startsWith('ALPHA:') || text.startsWith('[alpha]'))
+    return '<span class="text-cyan-400">' + esc(text) + '</span>';
+  if (text.startsWith('BETA:') || text.startsWith('[beta]'))
+    return '<span class="text-amber-400">' + esc(text) + '</span>';
+  if (text.includes('DONE') || text.includes('done') || text.includes('RESULT'))
+    return '<span class="text-emerald-400 font-semibold">' + esc(text) + '</span>';
+  if (text.includes('ERROR') || text.includes('error'))
+    return '<span class="text-rose-400">' + esc(text) + '</span>';
+  if (text.startsWith('['))
+    return '<span class="text-slate-500">' + esc(text) + '</span>';
+  return '<span class="text-slate-400">' + esc(text) + '</span>';
+}
+
+function esc(s) { return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+function parseELPResult(text) {
+  const m = text.match(/round (\d+).*?align (\d+)%.*?GAR ([\d.]+).*?SCR ([\d.]+)/);
+  if (m) return { rounds: parseInt(m[1]), align: parseInt(m[2]), gar: parseFloat(m[3]), scr: parseFloat(m[4]) };
+  return null;
+}
+
+function setDisabled(disabled) {
+  document.getElementById('btnRunBoth').disabled = disabled;
+}
+
+async function runScenario(scenario) {
+  const panelId = scenario === 'free_form' ? 'ff' : 'elp';
+  resetPanel(panelId);
+  const logs = [];
+
+  return new Promise((resolve) => {
+    const es = new EventSource('/run/' + scenario);
+
+    es.addEventListener('status', (e) => {
+      const d = JSON.parse(e.data);
+      addLog(panelId, d.msg);
+    });
+
+    es.addEventListener('log', (e) => {
+      const d = JSON.parse(e.data);
+      logs.push(d.line);
+      addLog(panelId, d.line);
+    });
+
+    es.addEventListener('result', (e) => {
+      const d = JSON.parse(e.data);
+      addLog(panelId, 'RESULT: ' + d.text);
+      if (scenario === 'elp') {
+        const parsed = parseELPResult(d.text);
+        if (parsed) {
+          document.getElementById('elpRounds').textContent = parsed.rounds;
+          document.getElementById('elpAlign').textContent = parsed.align + '%';
+          document.getElementById('elpStatus').textContent = parsed.align > 0 ? 'Converged' : 'Failed';
+          elpResult = parsed;
+        }
+      }
+    });
+
+    es.addEventListener('error', (e) => {
+      if (e.data) {
+        const d = JSON.parse(e.data);
+        addLog(panelId, 'ERROR: ' + d.msg);
+      }
+    });
+
+    es.addEventListener('done', (e) => {
+      es.close();
+      if (scenario === 'free_form') {
+        const hasMappings = logs.some(l => l.includes('MAPPINGS_COMPLETE'));
+        const doneLog = logs.find(l => l.includes('DONE'));
+        let rounds = 30;
+        if (doneLog) { const rm = doneLog.match(/after (\d+)/); if (rm) rounds = parseInt(rm[1]); }
+        document.getElementById('ffRounds').textContent = rounds;
+        document.getElementById('ffAlign').textContent = hasMappings ? 'Claimed' : '0%';
+        document.getElementById('ffStatus').textContent = hasMappings ? 'Unverified' : 'Failed';
+        ffResult = { rounds, converged: hasMappings, align: hasMappings ? 0 : 0 };
+        finishPanel('ff', false);
+      } else {
+        finishPanel('elp', elpResult && elpResult.align > 0);
+      }
+      resolve();
+    });
+
+    es.onerror = () => { es.close(); finishPanel(panelId, false); resolve(); };
+  });
+}
+
+async function runBoth() {
+  setDisabled(true);
+  ffResult = null; elpResult = null;
+  document.getElementById('comparisonSection').style.display = 'none';
+
+  await Promise.all([runScenario('free_form'), runScenario('elp')]);
+
+  showComparison();
+  setDisabled(false);
+}
+
+function showComparison() {
+  if (!ffResult || !elpResult) return;
+  document.getElementById('comparisonSection').style.display = 'block';
+
+  const ffAlign = 0;
+  const elpAlign = elpResult.align;
+
+  document.getElementById('cmpFFAlign').textContent = ffAlign + '%';
+  document.getElementById('cmpELPAlign').textContent = elpAlign + '%';
+  document.getElementById('barFF').style.width = ffAlign + '%';
+  document.getElementById('barELP').style.width = elpAlign + '%';
+
+  let verdict = '';
+  if (elpAlign > 0 && !ffResult.converged) {
+    verdict = `ELP achieved ${elpAlign}% genuine alignment while Free-Form failed completely. Structured protocol with ToM wins decisively.`;
+  } else if (elpAlign > 0 && ffResult.converged) {
+    verdict = `Free-Form claimed convergence but with zero grounding verification. ELP achieved ${elpAlign}% verified alignment.`;
+  } else {
+    verdict = `ELP: ${elpAlign}% alignment. Free-Form: ${ffResult.converged ? 'claimed but unverified' : 'failed to converge'}.`;
+  }
+  document.getElementById('verdict').textContent = verdict;
+  document.getElementById('comparisonSection').scrollIntoView({ behavior: 'smooth' });
+}
+</script>
+</body>
+</html>

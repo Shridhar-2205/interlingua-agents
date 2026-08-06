@@ -61,10 +61,14 @@ def _llm(system: str, user: str) -> Optional[dict]:
     """Call the LLM, expect a JSON object back. None on any failure → caller falls back."""
     try:
         import litellm
+        litellm.suppress_debug_info = True
         base_url = (os.environ.get("LLM_API_BASE") or os.environ.get("LLM_BASE_URL")
                     or os.environ.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_API_BASE"))
+        model = _MODEL
+        if base_url and not model.startswith("openai/"):
+            model = f"openai/{model}"
         kw: dict = {
-            "model": _MODEL,
+            "model": model,
             "messages": [{"role": "system", "content": system},
                          {"role": "user", "content": user}],
             "temperature": 0.4,
