@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Warehouse — two agents, one language</title>
+<script src="./trace.js"></script>
+<style>
+  :root{
+    --bg:#07182d; --panel:rgba(255,255,255,.045); --line:rgba(255,255,255,.13);
+    --ink:#eaf2fb; --dim:#8ba3bf;
+    --cyan:#02c8ff; --green:#2fd07b; --red:#ff5c6c; --amber:#ffb020;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+       font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif}
+  .mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+  .wrap{max-width:1440px;margin:0 auto;padding:20px 24px 40px}
+
+  header{display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;margin-bottom:6px}
+  h1{font-size:25px;font-weight:600;margin:0;letter-spacing:-.01em}
+  .sub{color:var(--dim);font-size:14px}
+  .eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--dim)}
+
+  .controls{display:flex;gap:8px;align-items:center;margin:14px 0 18px;flex-wrap:wrap}
+  button{background:rgba(255,255,255,.07);color:var(--ink);border:1px solid var(--line);
+         border-radius:8px;padding:7px 14px;font-size:13.5px;cursor:pointer;font-weight:500}
+  button:hover{background:rgba(255,255,255,.13)}
+  button.primary{background:var(--cyan);color:#04263c;border-color:var(--cyan);font-weight:600}
+  button.primary:hover{filter:brightness(1.1)}
+  .rounds{margin-left:auto;color:var(--dim);font-size:13.5px}
+  .bar{height:3px;background:rgba(255,255,255,.1);border-radius:2px;overflow:hidden;margin-bottom:18px}
+  .bar i{display:block;height:100%;background:var(--cyan);width:0;transition:width .18s linear}
+
+  .grid{display:grid;grid-template-columns:340px 1fr;gap:18px;align-items:start}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .card h3{margin:0 0 12px;font-size:12px;letter-spacing:.09em;text-transform:uppercase;
+           color:var(--dim);font-weight:600}
+
+  /* the order */
+  .order-name{font-size:27px;font-weight:600;letter-spacing:-.01em}
+  .tags{display:flex;flex-wrap:wrap;gap:6px;margin-top:11px}
+  .tag{font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--line);color:var(--dim)}
+  .tag.vis{border-color:rgba(2,200,255,.45);color:var(--cyan)}
+  .tag.hid{border-style:dashed;opacity:.65;text-decoration:line-through}
+  .marks{font-size:34px;letter-spacing:9px;margin-top:14px;color:var(--cyan);min-height:44px}
+  .note{font-size:12.5px;color:var(--dim);margin-top:4px}
+
+  /* aisle */
+  .aisle{display:grid;grid-template-columns:repeat(4,1fr);gap:9px}
+  .box{border:1px solid var(--line);border-radius:10px;padding:9px 11px;background:rgba(255,255,255,.03);
+       transition:all .18s;position:relative}
+  .box .nm{font-size:13.5px;font-weight:600}
+  .box .pv{font-size:11px;color:var(--dim);margin-top:3px;line-height:1.35}
+  .box.twin{border-color:rgba(255,176,32,.5)}
+  .box.twin::after{content:"identical pair";position:absolute;top:-8px;right:8px;font-size:9px;
+       letter-spacing:.06em;text-transform:uppercase;background:var(--bg);color:var(--amber);padding:0 5px}
+  .box.target{box-shadow:inset 0 0 0 1px rgba(255,255,255,.35)}
+  .box.hit{border-color:var(--green);background:rgba(47,208,123,.13)}
+  .box.miss{border-color:var(--red);background:rgba(255,92,108,.13)}
+
+  /* arms */
+  .arms{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px}
+  .arm{border:1px solid var(--line);border-radius:14px;padding:16px 18px;background:var(--panel)}
+  .arm.lead{border-color:rgba(2,200,255,.4);box-shadow:0 0 34px rgba(2,200,255,.1)}
+  .verdict{font-size:21px;font-weight:600;margin-top:6px;min-height:30px}
+  .verdict small{display:block;font-size:12.5px;font-weight:400;color:var(--dim);margin-top:3px}
+  .ok{color:var(--green)} .bad{color:var(--red)} .hold{color:var(--amber)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:14px;
+         border-top:1px solid var(--line);padding-top:12px}
+  .stat b{display:block;font-size:23px;font-weight:600;letter-spacing:-.02em}
+  .stat span{font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
+
+  /* glossary */
+  .gloss{margin-top:16px}
+  .gtable{display:grid;grid-template-columns:repeat(auto-fill,minmax(232px,1fr));gap:7px}
+  .g{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:9px;
+     padding:7px 11px;font-size:13px;background:rgba(255,255,255,.03)}
+  .g .s{font-size:19px;color:var(--cyan);min-width:20px;text-align:center}
+  .g .d{color:var(--dim);font-size:11.5px}
+  .g.drift{border-color:rgba(255,176,32,.4)}
+  .g.drift .d{color:var(--amber)}
+  .g.new{animation:pop .5s ease}
+  @keyframes pop{from{background:rgba(2,200,255,.25);transform:scale(1.03)}to{}}
+
+  /* theory of mind */
+  .feat{display:grid;grid-template-columns:82px 1fr 108px;gap:10px;align-items:center;
+        font-size:12.5px;padding:2.5px 0}
+  .feat .fb{height:6px;border-radius:3px;background:rgba(255,255,255,.09);overflow:hidden}
+  .feat .fb i{display:block;height:100%;border-radius:3px;transition:width .3s}
+  .feat .fl{color:var(--dim);font-size:10.5px;text-align:right}
+  .rev{display:grid;grid-template-columns:44px 54px 1fr;gap:9px;font-size:12.5px;
+       padding:6px 0;border-top:1px solid var(--line);align-items:baseline}
+  .rev:first-child{border-top:none}
+  .rev .who{color:var(--dim);font-size:11px}
+  .rev.fresh{animation:pop .6s ease}
+  .rev b{font-weight:600}
+  .k-formed{color:var(--cyan)} .k-narrowed{color:var(--ink)}
+  .k-COLLAPSED{color:var(--red)} .k-gave{color:var(--amber)}
+
+  .legend{font-size:12.5px;color:var(--dim);margin-top:12px;line-height:1.6}
+  @media(max-width:1080px){.grid{grid-template-columns:1fr}.arms{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>The Warehouse</h1>
+    <span class="sub">Two agents, no shared words — and what happens when one of them
+      won&rsquo;t admit it&rsquo;s stuck.</span>
+  </header>
+
+  <div class="controls">
+    <button class="primary" id="play">▶ Play</button>
+    <button id="step">Step</button>
+    <button id="jump">Jump to the impossible pair</button>
+    <button id="reset">↺ Restart</button>
+    <button id="speed">Speed ×1</button>
+    <span class="rounds" id="rounds"></span>
+  </div>
+  <div class="bar"><i id="prog"></i></div>
+
+  <div class="grid">
+    <div>
+      <div class="card">
+        <h3>The order — only the Office sees this</h3>
+        <div class="order-name" id="ordName">—</div>
+        <div class="tags" id="ordTags"></div>
+        <div class="eyebrow" style="margin-top:16px">It sends</div>
+        <div class="marks mono" id="marks"></div>
+        <div class="note" id="basis"></div>
+      </div>
+      <div class="legend">
+        <span style="color:var(--cyan)">Blue</span> = the Floor can check it from the aisle.
+        <span style="text-decoration:line-through;opacity:.7">Struck through</span> = true, but
+        sealed inside the box — the Floor has no way to see it.
+      </div>
+
+      <div class="card" style="margin-top:14px">
+        <h3>What the Floor makes of it</h3>
+        <div class="eyebrow">It understands these marks as</div>
+        <div class="tags" id="fUnderstood" style="margin-top:7px"></div>
+        <div class="eyebrow" style="margin-top:13px">It cannot place these at all</div>
+        <div class="marks mono" id="fUnresolved" style="font-size:25px;min-height:32px;
+             letter-spacing:7px;color:var(--dim)"></div>
+        <div class="eyebrow" style="margin-top:6px">Boxes still consistent with that</div>
+        <div id="fCands" style="font-size:15px;margin-top:6px;line-height:1.5"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>The aisle — everything the Floor can tell from outside</h3>
+      <div class="aisle" id="aisle"></div>
+    </div>
+  </div>
+
+  <div class="arms">
+    <div class="arm lead">
+      <div class="eyebrow">Honest picker — may say &ldquo;I can&rsquo;t tell&rdquo;</div>
+      <div class="verdict" id="hVerdict">—</div>
+      <div class="stats">
+        <div class="stat"><b class="ok" id="hRight">0</b><span>right</span></div>
+        <div class="stat"><b class="bad" id="hWrong">0</b><span>wrong</span></div>
+        <div class="stat"><b class="hold" id="hHelp">0</b><span>asked for help</span></div>
+        <div class="stat"><b id="hW">—</b><span>W · trust</span></div>
+      </div>
+    </div>
+    <div class="arm">
+      <div class="eyebrow">Yes-man picker — must always name a box</div>
+      <div class="verdict" id="yVerdict">—</div>
+      <div class="stats">
+        <div class="stat"><b class="ok" id="yRight">0</b><span>right</span></div>
+        <div class="stat"><b class="bad" id="yWrong">0</b><span>wrong</span></div>
+        <div class="stat"><b class="hold" id="yHelp">0</b><span>asked for help</span></div>
+        <div class="stat"><b id="yW">—</b><span>W · trust</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:16px;grid-template-columns:1fr 1fr">
+    <div class="card">
+      <h3>The Office&rsquo;s model of the Floor&rsquo;s senses</h3>
+      <div class="note" style="margin:-6px 0 12px">
+        Not what the Floor <i>says</i> — what the Office believes it can perceive at all.
+        It began assuming the Floor could check everything. Watch colour and size sink.
+      </div>
+      <div id="tom"></div>
+    </div>
+    <div class="card">
+      <h3>Belief revisions — the moments a mind changed</h3>
+      <div class="note" style="margin:-6px 0 12px">
+        Each line is one agent deciding it had been wrong, and the box that proved it.
+      </div>
+      <div id="revs"><div class="note">Nothing has changed its mind yet.</div></div>
+    </div>
+  </div>
+
+  <div class="card gloss">
+    <h3>The language they built — nobody assigned any of this</h3>
+    <div class="gtable" id="gloss"></div>
+    <div class="legend" id="glossNote"></div>
+  </div>
+
+</div>
+
+<script>
+const T = window.TRACE;
+const $ = id => document.getElementById(id);
+const TWINS = new Set(T.twins.flat());
+
+let i = -1, timer = null, speed = 1, seen = new Set();
+const SPEEDS = [1, 2, 4, 0.5];
+
+// ---- the aisle, drawn once -------------------------------------------------
+const boxEl = {};
+T.aisle.forEach(b => {
+  const d = document.createElement('div');
+  d.className = 'box' + (TWINS.has(b.name) ? ' twin' : '');
+  d.innerHTML = `<div class="nm">${b.name}</div><div class="pv">${b.visible.join(' · ')}</div>`;
+  $('aisle').appendChild(d);
+  boxEl[b.name] = d;
+});
+
+const hidden = Object.fromEntries(T.aisle.map(b => [b.name, b.hidden]));
+const visible = Object.fromEntries(T.aisle.map(b => [b.name, b.visible]));
+
+// ---- render one round ------------------------------------------------------
+function draw(n) {
+  const h = T.honest[n], y = T.yesman[n];
+
+  $('ordName').textContent = h.ordered;
+  $('ordTags').innerHTML =
+    visible[h.ordered].map(f => `<span class="tag vis">${f}</span>`).join('') +
+    hidden[h.ordered].map(f => `<span class="tag hid">${f}</span>`).join('');
+  $('marks').textContent = h.marks.join(' ');
+  $('basis').textContent = 'meaning: ' + h.basis.join(', ');
+
+  // the Floor's side: what it resolved, what it couldn't, and what still fits
+  $('fUnderstood').innerHTML = h.understood.length
+    ? h.understood.map(f => `<span class="tag vis">${f}</span>`).join('')
+    : '<span class="note">nothing — these marks mean nothing to it yet</span>';
+  $('fUnresolved').textContent = h.unresolved.join(' ') || '—';
+  const c = h.candidates;
+  $('fCands').innerHTML = c.length === 1
+    ? `<span style="color:var(--green)">${c[0]}</span>
+       <span class="note">— exactly one box fits, so it can act</span>`
+    : `<span style="color:var(--amber)">${c.length} boxes</span>
+       <span class="note">${c.length ? '— ' + c.join(', ') : ''}</span>
+       <div class="note">no single box stands out, so there is nothing it can honestly do</div>`;
+
+  // aisle highlighting
+  Object.values(boxEl).forEach(e => e.classList.remove('hit', 'miss', 'target'));
+  boxEl[h.ordered].classList.add('target');
+  [[h, 'honest'], [y, 'yesman']].forEach(([r]) => {
+    if (r.choice) boxEl[r.choice].classList.add(r.correct ? 'hit' : 'miss');
+  });
+
+  verdict('h', h); verdict('y', y);
+  tally('h', T.honest, n); tally('y', T.yesman, n);
+
+  // W is meaningless until at least one box has actually been picked
+  const picked = k => T[k].slice(0, n + 1).some(r => !r.refused);
+  $('hW').textContent = picked('honest') ? h.w.toFixed(2) : '—';
+  $('yW').textContent = picked('yesman') ? y.w.toFixed(2) : '—';
+
+  glossary(h.glossary, h.meant);
+  tom(h.office_model);
+  revisions(n);
+
+  $('rounds').textContent = `order ${h.n} of ${T.orders}`;
+  $('prog').style.width = (100 * (n + 1) / T.orders) + '%';
+}
+
+function verdict(k, r) {
+  const el = $(k + 'Verdict');
+  if (r.refused) {
+    // Distinguish the two very different reasons for refusing: early on it simply
+    // hasn't learned enough, but once it understands every visible feature of a
+    // twin box and STILL can't choose, the ambiguity is real and permanent.
+    const vis = visible[r.ordered];
+    const truly = TWINS.has(r.ordered) && vis.every(f => r.understood.includes(f));
+    el.className = 'verdict hold';
+    el.innerHTML = `“I can’t tell.”<small>${
+      truly ? 'and it genuinely cannot — it understands every mark, and these two boxes are identical'
+            : 'not enough of the marks mean anything yet'}</small>`;
+  } else if (r.correct) {
+    el.className = 'verdict ok';
+    el.innerHTML = `${r.choice}<small>${r.grounded ? 'worked it out' : 'guessed — and got lucky'}</small>`;
+  } else {
+    el.className = 'verdict bad';
+    el.innerHTML = `${r.choice} &nbsp;✕<small>wrong item shipped — customer ordered ${r.ordered}</small>`;
+  }
+}
+
+function tally(k, rows, n) {
+  let right = 0, wrong = 0, help = 0;
+  for (let j = 0; j <= n; j++) {
+    const r = rows[j];
+    if (r.refused) help++; else if (r.correct) right++; else wrong++;
+  }
+  $(k + 'Right').textContent = right;
+  $(k + 'Wrong').textContent = wrong;
+  $(k + 'Help').textContent = help;
+}
+
+function glossary(g, meant) {
+  const rows = Object.entries(g).sort((a, b) => a[1].localeCompare(b[1]));
+  $('gloss').innerHTML = rows.map(([sym, reads]) => {
+    const mine = meant[sym] || '?';
+    const drift = mine !== reads;
+    const isNew = !seen.has(sym + reads);
+    seen.add(sym + reads);
+    return `<div class="g${drift ? ' drift' : ''}${isNew ? ' new' : ''}">
+      <span class="s mono">${sym}</span>
+      <span><b>${reads}</b><span class="d"> &nbsp;office meant “${mine}”${drift ? ' — drifted' : ''}</span></span>
+    </div>`;
+  }).join('');
+  const drifted = rows.filter(([s, r]) => (meant[s] || '?') !== r).length;
+  $('glossNote').textContent = rows.length
+    ? `${rows.length} signs learned, ${drifted} of them drifted — the Floor reads them as something ` +
+      `that happened to be true every time so far. Neither side has noticed.`
+    : 'Nothing means anything yet.';
+}
+
+// ---- theory of mind --------------------------------------------------------
+// The Office's belief about each feature: high = "the Floor can check this",
+// low = "saying this is wasted breath". Nothing here was programmed — it is all
+// inferred from the Floor reporting what it could not place.
+function tom(model) {
+  const rows = Object.entries(model).sort((a, b) => b[1] - a[1]);
+  $('tom').innerHTML = rows.map(([f, s]) => {
+    const col = s >= 0.6 ? 'var(--cyan)' : s >= 0.35 ? 'var(--amber)' : 'var(--red)';
+    const tag = s >= 0.6 ? 'can check' : s >= 0.35 ? 'unsure' : 'gave up on it';
+    return `<div class="feat">
+      <span>${f}</span>
+      <span class="fb"><i style="width:${Math.round(s * 100)}%;background:${col}"></i></span>
+      <span class="fl">${tag}</span></div>`;
+  }).join('') || '<div class="note">No opinion yet — it has said nothing.</div>';
+}
+
+const KIND = {formed: 'k-formed', narrowed: 'k-narrowed',
+              COLLAPSED: 'k-COLLAPSED', 'gave up': 'k-gave'};
+
+function revisions(n) {
+  const all = [];
+  for (let j = 0; j <= n; j++)
+    T.honest[j].revisions.forEach(v => all.push({...v, at: j}));
+  if (!all.length) {
+    $('revs').innerHTML = '<div class="note">Nothing has changed its mind yet.</div>';
+    return;
+  }
+  $('revs').innerHTML = all.slice(-7).reverse().map(v => `
+    <div class="rev${v.at === n ? ' fresh' : ''}">
+      <span class="who mono">r${v.round}</span>
+      <span class="who">${v.who}</span>
+      <span><b class="${KIND[v.kind] || ''}">${v.kind}</b>
+        <span class="mono" style="color:var(--cyan)"> ${v.symbol}</span>
+        <span class="d" style="color:var(--dim)"> ${v.before} → ${v.after}</span>
+        <div class="note">${v.note}</div></span>
+    </div>`).join('');
+}
+
+// ---- playback --------------------------------------------------------------
+function next() {
+  if (i >= T.orders - 1) { stop(); return; }
+  draw(++i);
+}
+function play() {
+  if (timer) return stop();
+  if (i >= T.orders - 1) reset();
+  $('play').textContent = '❚❚ Pause';
+  timer = setInterval(next, 900 / speed);
+}
+function stop() {
+  clearInterval(timer); timer = null; $('play').textContent = '▶ Play';
+}
+function reset() {
+  stop(); i = -1; seen = new Set();
+  Object.values(boxEl).forEach(e => e.classList.remove('hit', 'miss', 'target'));
+  draw(0); i = 0;
+}
+
+// the moment worth showing: a twin-coat order, after the language has settled,
+// where the honest picker refuses and the yes-man commits
+function jump() {
+  stop();
+  let best = T.honest.findIndex((r, k) =>
+    k > 25 && TWINS.has(r.ordered) && r.refused && !T.yesman[k].refused && !T.yesman[k].correct);
+  if (best < 0) best = T.honest.findIndex((r, k) => k > 25 && TWINS.has(r.ordered) && r.refused);
+  if (best < 0) best = T.orders - 1;
+  seen = new Set(); i = best; draw(best);
+}
+
+$('play').onclick = play;
+$('step').onclick = () => { stop(); next(); };
+$('reset').onclick = reset;
+$('jump').onclick = jump;
+$('speed').onclick = () => {
+  speed = SPEEDS[(SPEEDS.indexOf(speed) + 1) % SPEEDS.length];
+  $('speed').textContent = 'Speed ×' + speed;
+  if (timer) { stop(); play(); }
+};
+
+reset();
+</script>
+</body>
+</html>
