@@ -1,30 +1,26 @@
 """Interlingua Dashboard server — combines two use cases in one UI.
 
-    python server.py            # mock mode (default) — fast, no LLM
-    python server.py --live     # live mode — starts real agents, calls LLM
+    python server.py            # mock mode — fast demo, no agents/LLM required
 
-Serves a single-page dashboard on http://localhost:9500 with a top-level tab
+Serves a single-page dashboard on http://127.0.0.1:9500 with a top-level tab
 switcher:
 
-  1. A2A Scenario Comparison — Free-Form A2A vs ELP-over-A2A (streams live via
-     SSE, mock or live agents).
-  2. Emergent Compression Demo — the static compression / grounding (ToM)
-     walkthrough (client-side, reads demo_data.js + firstcontact_data.js).
+  1. Emergent Alignment — Free-Form A2A vs ELP-over-A2A (streams a mock run via
+     SSE using the shared CONCEPTS vocabulary; only the protocol differs).
+  2. Bandwidth & Grounding — token compression + grounding-an-opaque-code (ToM)
+     walkthrough, replayed from demo_data.js + firstcontact_data.js.
+
+Mock-only: every stream is generated locally (no real agents, no LLM calls), so
+the demo is instant and fully self-contained.
 """
 from __future__ import annotations
 
 import asyncio
 import json
-import os
 import random
-import signal
-import subprocess
-import sys
-import time
 from pathlib import Path
 from uuid import uuid4
 
-import httpx
 import uvicorn
 from starlette.applications import Starlette
 from starlette.responses import FileResponse, JSONResponse
@@ -32,22 +28,15 @@ from starlette.routing import Route
 from starlette.requests import Request
 from sse_starlette.sse import EventSourceResponse
 
-# Dashboard lives at <repo>/dashboard; scenario agents live under
-# <repo>/scenario_examples/{free_form,elp}; the l9 package sits at <repo>/../l9.
+# Dashboard lives at <repo>/dashboard; static assets sit alongside it.
 DASHBOARD_DIR = Path(__file__).resolve().parent
-REPO_ROOT = DASHBOARD_DIR.parent
-SCENARIO_ROOT = REPO_ROOT / "scenario_examples"
-FREE_FORM_DIR = SCENARIO_ROOT / "free_form"
-ELP_DIR = SCENARIO_ROOT / "elp"
 STATIC_DIR = DASHBOARD_DIR / "static"
 
-HOST, PORT = "localhost", 9500
-MOCK_MODE = "--live" not in sys.argv
+HOST, PORT = "127.0.0.1", 9500
 
+# Ports shown on the agent cards in the UI (illustrative — no real agents run).
 FF_ALPHA_PORT, FF_BETA_PORT = 9301, 9302
 ELP_ALPHA_PORT, ELP_BETA_PORT = 9401, 9402
-
-_procs: dict[str, subprocess.Popen] = {}
 
 CONCEPTS = ["river", "sea", "tree", "apple", "dance", "fruit", "fire", "moon", "star", "stone"]
 SYMBOLS = list("○✦≈△▽◆∿☆⬡♁∆⊚◐▣✧⋈●◇➤∞⟐⌘✺❉")
@@ -60,8 +49,12 @@ UNSHAREABLE = {"fire", "moon", "star", "stone"}
 # ══════════════════════════════════════════════════════════════════════════════
 
 async def _mock_free_form():
-    """Simulate a free-form run: confused LLM agents spiraling into failure."""
-    ff_objects = ["sun", "water", "fire", "rock", "tree", "moon", "sky", "cloud", "bird", "fish"]
+    """Simulate a free-form run: confused agents spiraling into failure.
+
+    Uses the SAME concept vocabulary as the ELP run (CONCEPTS) so both panels are
+    genuinely the same task/environment — only the protocol differs.
+    """
+    ff_objects = list(CONCEPTS)
     alien_sounds = ["vrk", "zul", "morra", "draak", "thaan", "nuu", "oosha", "qip", "plix", "felk",
                     "glisk", "tuu", "krin", "plif", "zraa", "gwom", "moof", "tweelk", "boff", "skree"]
 
@@ -213,182 +206,6 @@ async def _mock_elp():
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# LIVE MODE — starts real agents as subprocess, triggers via A2A
-# ══════════════════════════════════════════════════════════════════════════════
-
-def _env():
-    env = os.environ.copy()
-    for env_file in [FREE_FORM_DIR / ".env", ELP_DIR / ".env"]:
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    k, v = line.split("=", 1)
-                    env.setdefault(k.strip(), v.strip())
-    l9_dir = str(REPO_ROOT.parent / "l9")
-    project_root = str(REPO_ROOT.parent)
-    env["PYTHONPATH"] = os.pathsep.join([l9_dir, project_root, env.get("PYTHONPATH", "")])
-    env["PYTHONUNBUFFERED"] = "1"
-    return env
-
-
-def _kill_all():
-    for name, p in list(_procs.items()):
-        try:
-            os.killpg(os.getpgid(p.pid), signal.SIGTERM)
-        except (ProcessLookupError, OSError):
-            pass
-        _procs.pop(name, None)
-
-
-PYTHON = sys.executable
-
-
-def _start_agent(name: str, script: Path, env: dict) -> subprocess.Popen:
-    if name in _procs:
-        try:
-            os.killpg(os.getpgid(_procs[name].pid), signal.SIGTERM)
-        except (ProcessLookupError, OSError):
-            pass
-    p = subprocess.Popen(
-        [PYTHON, str(script)],
-        cwd=str(script.parent),
-        env=env,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        preexec_fn=os.setsid,
-    )
-    _procs[name] = p
-    return p
-
-
-async def _wait_for_port(port: int, timeout: float = 10.0):
-    start = time.time()
-    while time.time() - start < timeout:
-        try:
-            async with httpx.AsyncClient() as c:
-                r = await c.get(f"http://localhost:{port}/.well-known/agent.json", timeout=1)
-                if r.status_code in (200, 404, 405):
-                    return True
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.ConnectTimeout):
-            pass
-        await asyncio.sleep(0.3)
-    return False
-
-
-async def _live_scenario(scenario: str, run_id: str):
-    env = _env()
-
-    if scenario == "free_form":
-        alpha_port, beta_port = FF_ALPHA_PORT, FF_BETA_PORT
-        alpha_script = FREE_FORM_DIR / "agent_alpha.py"
-        beta_script = FREE_FORM_DIR / "agent_beta.py"
-    else:
-        alpha_port, beta_port = ELP_ALPHA_PORT, ELP_BETA_PORT
-        alpha_script = ELP_DIR / "agent_alpha.py"
-        beta_script = ELP_DIR / "agent_beta.py"
-
-    yield {"event": "status", "data": json.dumps({"msg": f"Starting {scenario} agents..."})}
-
-    # Kill leftover processes
-    import subprocess as _sp
-    for port in [alpha_port, beta_port]:
-        try:
-            pids = _sp.check_output(["lsof", "-ti", f":{port}"], text=True).strip()
-            if pids:
-                for pid in pids.split("\n"):
-                    os.kill(int(pid), signal.SIGTERM)
-        except (_sp.CalledProcessError, ValueError, ProcessLookupError):
-            pass
-    await asyncio.sleep(0.5)
-
-    _start_agent(f"{scenario}_beta", beta_script, env)
-    await asyncio.sleep(2)
-    _start_agent(f"{scenario}_alpha", alpha_script, env)
-
-    if not await _wait_for_port(alpha_port):
-        yield {"event": "error", "data": json.dumps({"msg": "Alpha agent failed to start"})}
-        return
-    if not await _wait_for_port(beta_port):
-        yield {"event": "error", "data": json.dumps({"msg": "Beta agent failed to start"})}
-        return
-
-    yield {"event": "status", "data": json.dumps({"msg": "Agents ready. Triggering..."})}
-
-    # Fire trigger in background, stream subprocess logs while waiting
-    result_holder: dict = {}
-
-    async def _trigger():
-        async with httpx.AsyncClient(timeout=600) as client:
-            payload = {
-                "jsonrpc": "2.0", "id": "1", "method": "SendMessage",
-                "params": {"message": {"message_id": f"trigger-{run_id}", "role": "ROLE_USER",
-                                       "parts": [{"text": "begin"}]}}
-            }
-            try:
-                resp = await client.post(
-                    f"http://localhost:{alpha_port}/",
-                    json=payload,
-                    headers={"Content-Type": "application/json", "A2A-Version": "1.0"},
-                )
-                result_holder["data"] = resp.json()
-            except Exception as e:
-                result_holder["error"] = str(e)
-
-    trigger_task = asyncio.create_task(_trigger())
-
-    # Stream stdout from both agents while the trigger runs
-    procs = [_procs.get(f"{scenario}_alpha"), _procs.get(f"{scenario}_beta")]
-    import select
-    while not trigger_task.done():
-        for proc in procs:
-            if proc and proc.stdout:
-                while select.select([proc.stdout], [], [], 0)[0]:
-                    line = proc.stdout.readline()
-                    if not line:
-                        break
-                    decoded = line.decode(errors="replace").rstrip()
-                    if decoded.strip() and "INFO:" not in decoded:
-                        yield {"event": "log", "data": json.dumps({"line": decoded})}
-        await asyncio.sleep(0.3)
-
-    # Drain any remaining output
-    for proc in procs:
-        if proc and proc.stdout:
-            while select.select([proc.stdout], [], [], 0.1)[0]:
-                line = proc.stdout.readline()
-                if not line:
-                    break
-                decoded = line.decode(errors="replace").rstrip()
-                if decoded.strip() and "INFO:" not in decoded:
-                    yield {"event": "log", "data": json.dumps({"line": decoded})}
-
-    if "error" in result_holder:
-        yield {"event": "error", "data": json.dumps({"msg": result_holder["error"]})}
-    elif "data" in result_holder:
-        result = result_holder["data"]
-        if "error" in result:
-            yield {"event": "error", "data": json.dumps({"msg": result["error"].get("message", "Unknown error")})}
-        else:
-            msg = result.get("result", {}).get("message", {})
-            parts = msg.get("parts", [])
-            text_part = next((p.get("text", "") for p in parts if "text" in p), "")
-            yield {"event": "result", "data": json.dumps({
-                "scenario": scenario, "text": text_part, "run_id": run_id,
-            })}
-
-    yield {"event": "done", "data": json.dumps({"scenario": scenario})}
-
-    for name in [f"{scenario}_alpha", f"{scenario}_beta"]:
-        if name in _procs:
-            try:
-                os.killpg(os.getpgid(_procs[name].pid), signal.SIGTERM)
-            except (ProcessLookupError, OSError):
-                pass
-            _procs.pop(name, None)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
 # AGENT INFO — serves agent cards + sample messages to the UI
 # ══════════════════════════════════════════════════════════════════════════════
 
@@ -410,10 +227,9 @@ def _agent_info():
                 "sample_message": {
                     "role": "ROLE_USER",
                     "parts": [
-                        {"text": "*points at fire* Fire!"},
-                        {"data": "{...}", "mediaType": "application/json"},
+                        {"text": "*points at the river* River!"},
                     ],
-                    "_note": "No participants, no episode, no grounding, no belief state",
+                    "_note": "Plain text only — no participants, no episode, no grounding, no belief, no ToM",
                 },
             },
             "beta": {
@@ -454,13 +270,55 @@ def _agent_info():
                 "sample_message": {
                     "role": "ROLE_USER",
                     "parts": [
-                        {"text": "alpha proposes ○ for river -> beta"},
-                        {"data": {"protocol": "ELP", "version": "0.1",
-                                  "participants": {"actors": [{"id": "alpha", "role": "sender"}, {"id": "beta", "role": "receiver"}]},
-                                  "message": {"id": "a3f8c901...", "parents": ["b7c2e4f0..."], "episode": "urn:ioc:emerge:session:run1"},
-                                  "context": {"topic": "concept:river"},
-                                  "type": "emergence",
-                                  "data": {"round": 5, "referent": "river", "proposal": "○", "decision": "propose"}},
+                        {"text": "alpha proposes \u2248 for river -> beta"},
+                        {"data": {
+                            "protocol": "ELP",
+                            "version": "0.1",
+                            "participants": {
+                                "actors": [
+                                    {"id": "alpha", "role": "sender"},
+                                    {"id": "beta", "role": "receiver"},
+                                ],
+                                "groups": None,
+                            },
+                            "message": {
+                                "id": "a3f8c901e2d4",
+                                "parents": ["b7c2e4f0a19c"],
+                                "episode": "urn:ioc:emerge:river:run1",
+                            },
+                            "context": {"topic": "concept:river"},
+                            "type": "emergence",
+                            "data": {
+                                "round": 5,
+                                "speaker": "alpha",
+                                "referent": "river",
+                                "proposal": "\u2248",
+                                "decision": "propose",
+                                "lexicons": {
+                                    "alpha": {"river": "\u2248", "sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "fire": "\u2248", "moon": "\u2606"},
+                                    "beta":  {"river": "\u2248", "sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "fire": "\u25bd", "moon": "\u25cf"},
+                                },
+                                "utterance": {
+                                    "text": "alpha proposes \u2248 for river",
+                                    "evidence": ["river"],
+                                    "addresses_evidence": ["river"],
+                                },
+                                "grounding": {
+                                    "contingency_verified": True,
+                                    "contingency_score": 1.0,
+                                    "repair_reason": None,
+                                },
+                                "belief": {"prior": 0.5, "posterior": 1.0, "revision_cause": "structured"},
+                                "tom": {
+                                    "beta": {"sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "river": "?"},
+                                },
+                                "history": [
+                                    {"referent": "sea",  "symbol": "\u25cf", "accepted": True, "grounded": True, "speaker": "beta"},
+                                    {"referent": "tree", "symbol": "\u229a", "accepted": True, "grounded": True, "speaker": "alpha"},
+                                    {"referent": "apple","symbol": "\u25b3", "accepted": True, "grounded": True, "speaker": "beta"},
+                                ],
+                            },
+                        },
                          "mediaType": "application/vnd.elp+json"},
                     ],
                     "extensions": ["https://outshift.io/a2a-ext/emergence/v1"],
@@ -493,7 +351,12 @@ def _agent_info():
                 "ParticipantSet": {"fields": {"actors": "list[Actor]", "groups": "Optional[dict]"}},
                 "Message": {"fields": {"id": "str (uuid)", "parents": "list[str]", "episode": "str (URN)"}},
                 "Context": {"fields": {"topic": "str (e.g. concept:river)"}},
-                "L9": {"fields": {"protocol": "str (ELP)", "version": "str (0.1)", "participants": "ParticipantSet", "message": "Message", "context": "Optional[Context]", "type": "str (emergence)", "data": "dict"}},
+                "L9": {"fields": {"protocol": "str (ELP)", "version": "str (0.1)", "participants": "ParticipantSet", "message": "Message", "context": "Optional[Context]", "type": "str (emergence)", "data": "EmergenceData"}},
+                "EmergenceData": {"fields": {"round": "int", "speaker": "agent_id", "referent": "concept", "proposal": "symbol", "decision": "init | propose | converged", "lexicons": "dict", "utterance": "Utterance", "grounding": "Grounding", "belief": "Belief", "tom": "dict (peer models)", "history": "list[Event]"}},
+                "Utterance": {"fields": {"text": "str", "evidence": "list[feature]", "addresses_evidence": "list[feature]"}},
+                "Grounding": {"fields": {"contingency_verified": "bool", "contingency_score": "float", "repair_reason": "str | None"}},
+                "Belief": {"fields": {"prior": "float", "posterior": "float", "revision_cause": "str"}},
+                "Event": {"fields": {"referent": "concept", "symbol": "symbol", "accepted": "bool", "grounded": "bool", "speaker": "agent_id"}},
             },
         },
     }
@@ -626,31 +489,14 @@ async def agents_info(request: Request):
     return JSONResponse(_agent_info())
 
 
-_running: set[str] = set()
-
 async def run_scenario(request: Request):
+    """Mock SSE stream for the Emergent Alignment scenarios (free_form | elp)."""
     scenario = request.path_params["scenario"]
-    run_id = uuid4().hex[:8]
-
-    def _wrap(gen):
-        async def _inner():
-            try:
-                async for item in gen:
-                    yield item
-            finally:
-                _running.discard(scenario)
-        return _inner()
-
-    if MOCK_MODE:
-        if scenario == "free_form":
-            return EventSourceResponse(_mock_free_form())
-        else:
-            return EventSourceResponse(_mock_elp())
-    else:
-        if scenario in _running:
-            return JSONResponse({"error": "already running"}, status_code=409)
-        _running.add(scenario)
-        return EventSourceResponse(_wrap(_live_scenario(scenario, run_id)))
+    if scenario == "free_form":
+        return EventSourceResponse(_mock_free_form())
+    elif scenario == "elp":
+        return EventSourceResponse(_mock_elp())
+    return JSONResponse({"error": "unknown scenario"}, status_code=404)
 
 
 async def run_demo(request: Request):
@@ -664,12 +510,7 @@ async def run_demo(request: Request):
 
 
 async def get_mode(request: Request):
-    return JSONResponse({"mock": MOCK_MODE})
-
-
-async def stop_all(request: Request):
-    _kill_all()
-    return JSONResponse({"ok": True})
+    return JSONResponse({"mock": True})
 
 
 def _static_file(request: Request):
@@ -687,14 +528,11 @@ app = Starlette(routes=[
     Route("/run/{scenario}", run_scenario),
     Route("/demo/{view}", run_demo),
     Route("/mode", get_mode),
-    Route("/stop", stop_all, methods=["POST"]),
     Route("/static/{path:path}", _static_file),
 ])
 
 
 if __name__ == "__main__":
-    mode_label = "MOCK (fast demo)" if MOCK_MODE else "LIVE (real agents + LLM)"
-    print(f"Interlingua Dashboard on http://{HOST}:{PORT}  [{mode_label}]")
-    print(f"  Tab 1: A2A Scenario Comparison   Tab 2: Emergent Compression Demo")
-    print(f"  Use --live flag to run real agents")
+    print(f"Interlingua Dashboard on http://{HOST}:{PORT}  [MOCK (fast demo)]")
+    print(f"  Tab 1: Emergent Alignment   Tab 2: Bandwidth & Grounding")
     uvicorn.run(app, host=HOST, port=PORT)
