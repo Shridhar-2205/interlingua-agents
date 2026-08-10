@@ -378,7 +378,7 @@
         <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Architecture</p>
         <div class="flex items-center justify-center gap-3">
           <div class="agent-block alpha">
-            <div class="text-cyan-400 font-semibold text-xs">Alpha</div>
+            <div class="text-cyan-400 font-semibold text-xs">Grace</div>
             <div class="text-[9px] text-slate-400 mono">:9301</div>
             <div class="text-[9px] text-slate-500 mt-1">English · No ToM</div>
           </div>
@@ -388,7 +388,7 @@
             <div class="text-[8px] text-slate-600 mt-1">SendMessage (text parts)</div>
           </div>
           <div class="agent-block beta">
-            <div class="text-amber-400 font-semibold text-xs">Beta</div>
+            <div class="text-amber-400 font-semibold text-xs">Rocky</div>
             <div class="text-[9px] text-slate-400 mono">:9302</div>
             <div class="text-[9px] text-slate-500 mt-1">Alien · Inconsistent</div>
           </div>
@@ -432,12 +432,12 @@
         <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Architecture</p>
         <div class="flex items-center justify-center gap-3">
           <div class="agent-block alpha">
-            <div class="text-cyan-400 font-semibold text-xs">Alpha</div>
+            <div class="text-cyan-400 font-semibold text-xs">Grace</div>
             <div class="text-[9px] text-slate-400 mono">:9401</div>
             <div class="text-[9px] text-emerald-400 mt-1">ToM + signaling</div>
             <div class="text-[9px] text-slate-500">lens: VISUAL</div>
             <div class="mt-1 pt-1 border-t border-cyan-900/30">
-              <div class="text-[8px] text-cyan-300">Actor{alpha, sender}</div>
+              <div class="text-[8px] text-cyan-300">Actor{grace, sender}</div>
             </div>
           </div>
           <div class="flex flex-col items-center flex-1 max-w-[160px]">
@@ -447,12 +447,12 @@
             <div class="text-[7px] text-violet-400 mt-0.5">application/vnd.elp+json</div>
           </div>
           <div class="agent-block beta">
-            <div class="text-amber-400 font-semibold text-xs">Beta</div>
+            <div class="text-amber-400 font-semibold text-xs">Rocky</div>
             <div class="text-[9px] text-slate-400 mono">:9402</div>
             <div class="text-[9px] text-emerald-400 mt-1">ToM + signaling</div>
             <div class="text-[9px] text-slate-500">lens: PHYSICAL</div>
             <div class="mt-1 pt-1 border-t border-amber-900/30">
-              <div class="text-[8px] text-amber-300">Actor{beta, receiver}</div>
+              <div class="text-[8px] text-amber-300">Actor{rocky, receiver}</div>
             </div>
           </div>
         </div>
@@ -472,10 +472,13 @@
         </div>
         <div class="glass p-3 flex flex-col justify-center">
           <p class="text-[9px] uppercase tracking-widest text-slate-500 mb-2">Metrics</p>
-          <div class="grid grid-cols-1 gap-2">
-            <div class="metric-box"><div class="metric-val text-emerald-400 text-lg" id="elpRounds">—</div><div class="metric-label">Rounds</div></div>
-            <div class="metric-box"><div class="metric-val text-emerald-400 text-lg" id="elpAlign">—</div><div class="metric-label">Alignment</div></div>
-            <div class="metric-box"><div class="metric-val text-emerald-400 text-lg" id="elpStatus">—</div><div class="metric-label">Result</div></div>
+          <div class="grid grid-cols-2 gap-2">
+            <div class="metric-box"><div class="metric-val text-emerald-400 text-base" id="elpRounds">—</div><div class="metric-label">Rounds</div></div>
+            <div class="metric-box"><div class="metric-val text-emerald-400 text-base" id="elpAlign">—</div><div class="metric-label">Alignment</div></div>
+            <div class="metric-box" title="Genuine Agreement Ratio — fraction of acceptances that reflect real, grounded agreement (not mere compliance)"><div class="metric-val text-emerald-400 text-base" id="elpGar">—</div><div class="metric-label">Genuine Agreement Ratio [GAR]</div></div>
+            <div class="metric-box" title="Social Compliance Ratio — fraction of acceptances driven by social compliance rather than grounding"><div class="metric-val text-emerald-400 text-base" id="elpScr">—</div><div class="metric-label">Social Compliance Ratio [SCR]</div></div>
+            <div class="metric-box" title="Provenance Weight — trust weight from linked message/episode provenance"><div class="metric-val text-emerald-400 text-base" id="elpW">—</div><div class="metric-label">Provenance Weight [W]</div></div>
+            <div class="metric-box"><div class="metric-val text-emerald-400 text-base" id="elpStatus">—</div><div class="metric-label">Result</div></div>
           </div>
         </div>
       </div>
@@ -705,11 +708,11 @@ function renderFFCards(ff) {
   delete cleanSample._note;
 
   document.getElementById('ffAlphaCard').innerHTML = `
-    <p class="text-[9px] uppercase tracking-widest text-cyan-500 mb-2">A2A Agent Card — Alpha</p>
+    <p class="text-[9px] uppercase tracking-widest text-cyan-500 mb-2">A2A Agent Card — Grace</p>
     ${renderCardFields(alphaCard, true)}
   `;
   document.getElementById('ffBetaCard').innerHTML = `
-    <p class="text-[9px] uppercase tracking-widest text-amber-500 mb-2">A2A Agent Card — Beta</p>
+    <p class="text-[9px] uppercase tracking-widest text-amber-500 mb-2">A2A Agent Card — Rocky</p>
     ${renderCardFields(betaCard, true)}
   `;
   document.getElementById('ffSampleMsg').innerHTML = `
@@ -737,11 +740,11 @@ function renderELPCards(elp) {
   document.getElementById('elpCardsPanel').innerHTML = `
     <div class="grid grid-cols-2 gap-3">
       <div>
-        <p class="text-[9px] uppercase tracking-widest text-cyan-500 mb-2">A2A Card — Alpha</p>
+        <p class="text-[9px] uppercase tracking-widest text-cyan-500 mb-2">A2A Card — Grace</p>
         ${renderCardFields(alphaCard, true)}
       </div>
       <div>
-        <p class="text-[9px] uppercase tracking-widest text-amber-500 mb-2">A2A Card — Beta</p>
+        <p class="text-[9px] uppercase tracking-widest text-amber-500 mb-2">A2A Card — Rocky</p>
         ${renderCardFields(betaCard, true)}
       </div>
     </div>
@@ -777,6 +780,9 @@ function resetPanel(id) {
   } else {
     document.getElementById('elpRounds').textContent = '—';
     document.getElementById('elpAlign').textContent = '—';
+    document.getElementById('elpGar').textContent = '—';
+    document.getElementById('elpScr').textContent = '—';
+    document.getElementById('elpW').textContent = '—';
     document.getElementById('elpStatus').textContent = '—';
   }
 }
@@ -814,8 +820,10 @@ function formatLog(text) {
 function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 function parseELPResult(text) {
-  const m = text.match(/round (\d+).*?align (\d+)%.*?GAR ([\d.]+).*?SCR ([\d.]+)/);
-  if (m) return { rounds: parseInt(m[1]), align: parseInt(m[2]), gar: parseFloat(m[3]), scr: parseFloat(m[4]) };
+  const m = text.match(/round (\d+).*?align (\d+)%.*?GAR ([\d.]+).*?SCR ([\d.]+)(?:.*?W ([\d.]+))?/);
+  if (m) return { rounds: parseInt(m[1]), align: parseInt(m[2]),
+                  gar: parseFloat(m[3]), scr: parseFloat(m[4]),
+                  w: m[5] != null ? parseFloat(m[5]) : null };
   return null;
 }
 
@@ -850,6 +858,9 @@ async function runScenario(scenario) {
         if (parsed) {
           document.getElementById('elpRounds').textContent = parsed.rounds;
           document.getElementById('elpAlign').textContent = parsed.align + '%';
+          document.getElementById('elpGar').textContent = parsed.gar.toFixed(2);
+          document.getElementById('elpScr').textContent = parsed.scr.toFixed(2);
+          document.getElementById('elpW').textContent = parsed.w == null ? '—' : parsed.w.toFixed(2);
           document.getElementById('elpStatus').textContent = parsed.align > 0 ? 'Converged' : 'Failed';
           elpResult = parsed;
         }

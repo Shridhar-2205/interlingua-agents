@@ -60,52 +60,52 @@ async def _mock_free_form():
     alien_sounds = ["vrk", "zul", "morra", "draak", "thaan", "nuu", "oosha", "qip", "plix", "felk",
                     "glisk", "tuu", "krin", "plif", "zraa", "gwom", "moof", "tweelk", "boff", "skree"]
 
-    yield {"event": "status", "data": json.dumps({"msg": "Opening A2A channel: Alpha (:9301) ⇄ Beta (:9302)…"})}
+    yield {"event": "status", "data": json.dumps({"msg": "Opening A2A channel: Grace (:9301) ⇄ Rocky (:9302)…"})}
     await asyncio.sleep(0.3)
     yield {"event": "status", "data": json.dumps({"msg": "Free-form text only — no shared codebook, no grounding, no ToM."})}
     await asyncio.sleep(0.3)
-    yield {"event": "log", "data": json.dumps({"line": "[alpha] SendMessage → beta  (text parts only)"})}
-    yield {"event": "log", "data": json.dumps({"line": "[beta ] SendMessage → alpha (text parts only)"})}
+    yield {"event": "log", "data": json.dumps({"line": "[grace] SendMessage → rocky  (text parts only)"})}
+    yield {"event": "log", "data": json.dumps({"line": "[rocky] SendMessage → grace  (text parts only)"})}
     await asyncio.sleep(0.2)
 
-    attempted: dict[str, set] = {}     # concept -> alien words Beta has used for it
+    attempted: dict[str, set] = {}     # concept -> alien words Rocky has used for it
     confirmed = 0
     for rnd in range(1, 31):
-        speaker = "alpha" if rnd % 2 == 1 else "beta"
-        receiver = "beta" if speaker == "alpha" else "alpha"
+        speaker = "grace" if rnd % 2 == 1 else "rocky"
+        receiver = "rocky" if speaker == "grace" else "grace"
         concept = random.choice(concepts)
 
-        if speaker == "alpha":
-            # Alpha names the concept in English and asks Beta to confirm.
+        if speaker == "grace":
+            # Grace names the concept in English and asks Rocky to confirm.
             yield {"event": "log", "data": json.dumps({
-                "line": f"[alpha] proposes '{concept.capitalize()}' for {concept} → beta"})}
+                "line": f"[grace] proposes '{concept.capitalize()}' for {concept} → rocky"})}
             await asyncio.sleep(0.13)
 
             prev = attempted.get(concept)
             word = random.choice(alien_sounds)
-            # Beta almost never reuses the same word for the same concept → drift.
+            # Rocky almost never reuses the same word for the same concept → drift.
             if prev and random.random() < 0.35:
                 word = random.choice(list(prev))
             attempted.setdefault(concept, set()).add(word)
 
             if prev and word not in prev:
                 yield {"event": "log", "data": json.dumps({
-                    "line": f"[beta ] replies '{word}' — but earlier said '{sorted(prev)[0]}' for {concept} (drift)"})}
+                    "line": f"[rocky] replies '{word}' — but earlier said '{sorted(prev)[0]}' for {concept} (drift)"})}
             elif rnd <= 6:
                 yield {"event": "log", "data": json.dumps({
-                    "line": f"[beta ] replies '{word}' — meaning unclear (no grounding)"})}
+                    "line": f"[rocky] replies '{word}' — meaning unclear (no grounding)"})}
             else:
                 yield {"event": "log", "data": json.dumps({
-                    "line": f"[beta ] '{word}'? … unsure which referent alpha meant"})}
+                    "line": f"[rocky] '{word}'? … unsure which referent grace meant"})}
         else:
-            # Beta initiates in its own tongue; Alpha can't tie it to a concept.
+            # Rocky initiates in its own tongue; Grace can't tie it to a concept.
             word = random.choice(alien_sounds)
             yield {"event": "log", "data": json.dumps({
-                "line": f"[beta ] proposes '{word}' for (unspecified) → alpha"})}
+                "line": f"[rocky] proposes '{word}' for (unspecified) → grace"})}
             await asyncio.sleep(0.13)
             guess = random.choice(concepts)
             yield {"event": "log", "data": json.dumps({
-                "line": f"[alpha] guesses '{word}' ≈ {guess}? — cannot verify (no confirmation channel)"})}
+                "line": f"[grace] guesses '{word}' ≈ {guess}? — cannot verify (no confirmation channel)"})}
 
         # The tell: nothing is ever mutually grounded.
         yield {"event": "log", "data": json.dumps({
@@ -129,24 +129,24 @@ async def _mock_elp():
     await asyncio.sleep(0.3)
     yield {"event": "status", "data": json.dumps({"msg": "Agents ready. Triggering..."})}
     await asyncio.sleep(0.3)
-    yield {"event": "log", "data": json.dumps({"line": f"Alpha Agent (ELP + ToM) on http://localhost:9401  (ext: https://outshift.io/a2a-ext/emergence/v1)"})}
-    yield {"event": "log", "data": json.dumps({"line": f"Beta Agent (ELP + ToM) on http://localhost:9402  (ext: https://outshift.io/a2a-ext/emergence/v1)"})}
+    yield {"event": "log", "data": json.dumps({"line": f"Grace Agent (ELP + ToM) on http://localhost:9401  (ext: https://outshift.io/a2a-ext/emergence/v1)"})}
+    yield {"event": "log", "data": json.dumps({"line": f"Rocky Agent (ELP + ToM) on http://localhost:9402  (ext: https://outshift.io/a2a-ext/emergence/v1)"})}
     await asyncio.sleep(0.2)
 
-    alpha_lex = {c: random.choice(SYMBOLS) for c in CONCEPTS}
-    beta_lex = {c: random.choice(SYMBOLS) for c in CONCEPTS}
+    grace_lex = {c: random.choice(SYMBOLS) for c in CONCEPTS}
+    rocky_lex = {c: random.choice(SYMBOLS) for c in CONCEPTS}
     history = []
     aligned = set()
 
     for rnd in range(1, 31):
-        speaker = "alpha" if rnd % 2 == 1 else "beta"
+        speaker = "grace" if rnd % 2 == 1 else "rocky"
         unresolved = [c for c in CONCEPTS if c not in aligned]
         if not unresolved:
             break
         concept = random.choice(unresolved)
-        symbol = alpha_lex[concept] if speaker == "alpha" else beta_lex[concept]
+        symbol = grace_lex[concept] if speaker == "grace" else rocky_lex[concept]
 
-        receiver = "beta" if speaker == "alpha" else "alpha"
+        receiver = "rocky" if speaker == "grace" else "grace"
         yield {"event": "log", "data": json.dumps({
             "line": f"[{speaker}] {speaker} proposes {symbol} for {concept} -> {receiver}"
         })}
@@ -155,10 +155,10 @@ async def _mock_elp():
         # Shareable concepts converge; unshareable ones don't
         if concept in SHAREABLE:
             if random.random() < 0.55:
-                if speaker == "alpha":
-                    beta_lex[concept] = symbol
+                if speaker == "grace":
+                    rocky_lex[concept] = symbol
                 else:
-                    alpha_lex[concept] = symbol
+                    grace_lex[concept] = symbol
                 aligned.add(concept)
                 history.append({"referent": concept, "symbol": symbol, "accepted": True,
                                 "grounded": True, "speaker": speaker})
@@ -183,11 +183,11 @@ async def _mock_elp():
     w = 1.0
 
     final_text = (f"done | round {rnd} | align {alignment:.0%} | GAR {gar} SCR {scr} W {w}")
-    yield {"event": "log", "data": json.dumps({"line": f"[alpha] {final_text}"})}
+    yield {"event": "log", "data": json.dumps({"line": f"[grace] {final_text}"})}
     await asyncio.sleep(0.1)
 
-    yield {"event": "log", "data": json.dumps({"line": f"  alpha : {alpha_lex}"})}
-    yield {"event": "log", "data": json.dumps({"line": f"  beta  : {beta_lex}"})}
+    yield {"event": "log", "data": json.dumps({"line": f"  grace : {grace_lex}"})}
+    yield {"event": "log", "data": json.dumps({"line": f"  rocky : {rocky_lex}"})}
 
     yield {"event": "result", "data": json.dumps({
         "scenario": "elp",
@@ -207,8 +207,8 @@ def _agent_info():
         "free_form": {
             "alpha": {
                 "card": {
-                    "name": "Alpha (free-form)",
-                    "description": "English-speaking agent, plain LLM, no ToM — free-form vocabulary building.",
+                    "name": "Grace (free-form)",
+                    "description": "English-speaking agent, no ToM — free-form vocabulary building.",
                     "version": "1.0.0",
                     "url": f"http://localhost:{FF_ALPHA_PORT}/",
                     "protocol_binding": "JSONRPC",
@@ -219,15 +219,15 @@ def _agent_info():
                 "sample_message": {
                     "role": "ROLE_USER",
                     "parts": [
-                        {"text": "alpha proposes \u2248 for river -> beta"},
+                        {"text": "grace proposes \u2248 for river -> rocky"},
                     ],
                     "_note": "Plain text only — no participants, no episode, no grounding, no belief, no ToM",
                 },
             },
             "beta": {
                 "card": {
-                    "name": "Beta (free-form)",
-                    "description": "Agent that speaks invented language, plain LLM, no ToM.",
+                    "name": "Rocky (free-form)",
+                    "description": "Agent that speaks an invented language, no ToM.",
                     "version": "1.0.0",
                     "url": f"http://localhost:{FF_BETA_PORT}/",
                     "protocol_binding": "JSONRPC",
@@ -240,8 +240,8 @@ def _agent_info():
         "elp": {
             "alpha": {
                 "card": {
-                    "name": "Alpha (ELP)",
-                    "description": "Emergent-convention agent (alpha) with ToM + signaling, ELP-over-A2A.",
+                    "name": "Grace (ELP)",
+                    "description": "Emergent-convention agent (Grace) with ToM + signaling, ELP-over-A2A.",
                     "version": "1.0.0",
                     "url": f"http://localhost:{ELP_ALPHA_PORT}/",
                     "protocol_binding": "JSONRPC",
@@ -262,14 +262,14 @@ def _agent_info():
                 "sample_message": {
                     "role": "ROLE_USER",
                     "parts": [
-                        {"text": "alpha proposes \u2248 for river -> beta"},
+                        {"text": "grace proposes \u2248 for river -> rocky"},
                         {"data": {
                             "protocol": "ELP",
                             "version": "0.1",
                             "participants": {
                                 "actors": [
-                                    {"id": "alpha", "role": "sender"},
-                                    {"id": "beta", "role": "receiver"},
+                                    {"id": "grace", "role": "sender"},
+                                    {"id": "rocky", "role": "receiver"},
                                 ],
                                 "groups": None,
                             },
@@ -282,16 +282,16 @@ def _agent_info():
                             "type": "emergence",
                             "data": {
                                 "round": 5,
-                                "speaker": "alpha",
+                                "speaker": "grace",
                                 "referent": "river",
                                 "proposal": "\u2248",
                                 "decision": "propose",
                                 "lexicons": {
-                                    "alpha": {"river": "\u2248", "sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "fire": "\u2248", "moon": "\u2606"},
-                                    "beta":  {"river": "\u2248", "sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "fire": "\u25bd", "moon": "\u25cf"},
+                                    "grace": {"river": "\u2248", "sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "fire": "\u2248", "moon": "\u2606"},
+                                    "rocky": {"river": "\u2248", "sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "fire": "\u25bd", "moon": "\u25cf"},
                                 },
                                 "utterance": {
-                                    "text": "alpha proposes \u2248 for river",
+                                    "text": "grace proposes \u2248 for river",
                                     "evidence": ["river"],
                                     "addresses_evidence": ["river"],
                                 },
@@ -302,12 +302,12 @@ def _agent_info():
                                 },
                                 "belief": {"prior": 0.5, "posterior": 1.0, "revision_cause": "structured"},
                                 "tom": {
-                                    "beta": {"sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "river": "?"},
+                                    "rocky": {"sea": "\u25cf", "tree": "\u229a", "apple": "\u25b3", "river": "?"},
                                 },
                                 "history": [
-                                    {"referent": "sea",  "symbol": "\u25cf", "accepted": True, "grounded": True, "speaker": "beta"},
-                                    {"referent": "tree", "symbol": "\u229a", "accepted": True, "grounded": True, "speaker": "alpha"},
-                                    {"referent": "apple","symbol": "\u25b3", "accepted": True, "grounded": True, "speaker": "beta"},
+                                    {"referent": "sea",  "symbol": "\u25cf", "accepted": True, "grounded": True, "speaker": "rocky"},
+                                    {"referent": "tree", "symbol": "\u229a", "accepted": True, "grounded": True, "speaker": "grace"},
+                                    {"referent": "apple","symbol": "\u25b3", "accepted": True, "grounded": True, "speaker": "rocky"},
                                 ],
                             },
                         },
@@ -318,8 +318,8 @@ def _agent_info():
             },
             "beta": {
                 "card": {
-                    "name": "Beta (ELP)",
-                    "description": "Emergent-convention agent (beta) with ToM + signaling, ELP-over-A2A.",
+                    "name": "Rocky (ELP)",
+                    "description": "Emergent-convention agent (Rocky) with ToM + signaling, ELP-over-A2A.",
                     "version": "1.0.0",
                     "url": f"http://localhost:{ELP_BETA_PORT}/",
                     "protocol_binding": "JSONRPC",
