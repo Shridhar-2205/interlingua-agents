@@ -798,9 +798,9 @@ function addLog(panelId, text) {
 }
 
 function formatLog(text) {
-  if (text.startsWith('ALPHA:') || text.startsWith('[alpha]'))
+  if (text.startsWith('ALPHA:') || text.startsWith('[alpha'))
     return '<span class="text-cyan-400">' + esc(text) + '</span>';
-  if (text.startsWith('BETA:') || text.startsWith('[beta]'))
+  if (text.startsWith('BETA:') || text.startsWith('[beta'))
     return '<span class="text-amber-400">' + esc(text) + '</span>';
   if (text.includes('DONE') || text.includes('done') || text.includes('RESULT'))
     return '<span class="text-emerald-400 font-semibold">' + esc(text) + '</span>';

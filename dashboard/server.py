@@ -54,78 +54,70 @@ async def _mock_free_form():
     Uses the SAME concept vocabulary as the ELP run (CONCEPTS) so both panels are
     genuinely the same task/environment — only the protocol differs.
     """
-    ff_objects = list(CONCEPTS)
+    concepts = list(CONCEPTS)
+    # Beta speaks an invented tongue; it reuses/renames words inconsistently, so no
+    # mapping ever gets mutually confirmed (there's no structured grounding channel).
     alien_sounds = ["vrk", "zul", "morra", "draak", "thaan", "nuu", "oosha", "qip", "plix", "felk",
                     "glisk", "tuu", "krin", "plif", "zraa", "gwom", "moof", "tweelk", "boff", "skree"]
 
-    yield {"event": "status", "data": json.dumps({"msg": "Starting free_form agents..."})}
+    yield {"event": "status", "data": json.dumps({"msg": "Opening A2A channel: Alpha (:9301) ⇄ Beta (:9302)…"})}
     await asyncio.sleep(0.3)
-    yield {"event": "status", "data": json.dumps({"msg": "Agents ready. Triggering..."})}
+    yield {"event": "status", "data": json.dumps({"msg": "Free-form text only — no shared codebook, no grounding, no ToM."})}
     await asyncio.sleep(0.3)
-    yield {"event": "log", "data": json.dumps({"line": "Alpha Agent (free-form) on http://localhost:9301"})}
-    yield {"event": "log", "data": json.dumps({"line": "Beta Agent (free-form) on http://localhost:9302"})}
+    yield {"event": "log", "data": json.dumps({"line": "[alpha] SendMessage → beta  (text parts only)"})}
+    yield {"event": "log", "data": json.dumps({"line": "[beta ] SendMessage → alpha (text parts only)"})}
     await asyncio.sleep(0.2)
 
-    attempted = {}
+    attempted: dict[str, set] = {}     # concept -> alien words Beta has used for it
+    confirmed = 0
     for rnd in range(1, 31):
-        obj = random.choice(ff_objects)
-        alpha_msg = f"*points at the {obj}* {obj.capitalize()}!"
-        yield {"event": "log", "data": json.dumps({"line": f"ALPHA: {alpha_msg}"})}
-        await asyncio.sleep(0.15)
+        speaker = "alpha" if rnd % 2 == 1 else "beta"
+        receiver = "beta" if speaker == "alpha" else "alpha"
+        concept = random.choice(concepts)
 
-        if rnd <= 5:
-            sound = random.choice(alien_sounds)
-            beta_msg = f"*looks at the {obj}, tilts head* {sound.capitalize()}!"
-            attempted[obj] = attempted.get(obj, set())
-            attempted[obj].add(sound)
-        elif rnd <= 12:
-            sound1 = random.choice(alien_sounds)
-            sound2 = random.choice(alien_sounds)
-            if random.random() < 0.6:
-                beta_msg = f"*squints, confused* ...{sound1}? ...no... {sound2}!"
-                attempted.setdefault(obj, set()).update([sound1, sound2])
+        if speaker == "alpha":
+            # Alpha names the concept in English and asks Beta to confirm.
+            yield {"event": "log", "data": json.dumps({
+                "line": f"[alpha] proposes '{concept.capitalize()}' for {concept} → beta"})}
+            await asyncio.sleep(0.13)
+
+            prev = attempted.get(concept)
+            word = random.choice(alien_sounds)
+            # Beta almost never reuses the same word for the same concept → drift.
+            if prev and random.random() < 0.35:
+                word = random.choice(list(prev))
+            attempted.setdefault(concept, set()).add(word)
+
+            if prev and word not in prev:
+                yield {"event": "log", "data": json.dumps({
+                    "line": f"[beta ] replies '{word}' — but earlier said '{sorted(prev)[0]}' for {concept} (drift)"})}
+            elif rnd <= 6:
+                yield {"event": "log", "data": json.dumps({
+                    "line": f"[beta ] replies '{word}' — meaning unclear (no grounding)"})}
             else:
-                beta_msg = f"*freezes, stares at other creature*"
-        elif rnd <= 20:
-            if random.random() < 0.7:
-                beta_msg = "*freezes completely*"
-            else:
-                beta_msg = f"*looks confused, points at something else* {random.choice(alien_sounds).capitalize()}!"
+                yield {"event": "log", "data": json.dumps({
+                    "line": f"[beta ] '{word}'? … unsure which referent alpha meant"})}
         else:
-            beta_msg = "*freezes*" if random.random() < 0.8 else "*blinks slowly*"
+            # Beta initiates in its own tongue; Alpha can't tie it to a concept.
+            word = random.choice(alien_sounds)
+            yield {"event": "log", "data": json.dumps({
+                "line": f"[beta ] proposes '{word}' for (unspecified) → alpha"})}
+            await asyncio.sleep(0.13)
+            guess = random.choice(concepts)
+            yield {"event": "log", "data": json.dumps({
+                "line": f"[alpha] guesses '{word}' ≈ {guess}? — cannot verify (no confirmation channel)"})}
 
-        yield {"event": "log", "data": json.dumps({"line": f"BETA:  {beta_msg}"})}
-        await asyncio.sleep(0.15)
+        # The tell: nothing is ever mutually grounded.
+        yield {"event": "log", "data": json.dumps({
+            "line": f"[{receiver}] no CONFIRM sent — mapping unresolved   [{rnd}/30]"})}
+        await asyncio.sleep(0.12)
 
-        if rnd <= 5:
-            alpha_react = f"*nods, noting the sound*"
-        elif rnd <= 10:
-            inconsistent = [o for o, sounds in attempted.items() if len(sounds) > 1]
-            if inconsistent:
-                alpha_react = f"*frowns — creature used different sounds for {inconsistent[0]}*"
-            else:
-                alpha_react = "*tries again, points more deliberately*"
-        elif rnd <= 20:
-            alpha_react = random.choice([
-                "*realizes the creature is stuck in a fear loop*",
-                "*stays very still, tries to appear non-threatening*",
-                "*sighs, tries a completely different approach*",
-                "*waits patiently for the creature to respond*",
-            ])
-        else:
-            alpha_react = random.choice([
-                "*stops completely*", "*remains still*", "*stays calm*",
-                "*gives up trying to communicate*",
-            ])
-
-        yield {"event": "log", "data": json.dumps({"line": f"ALPHA: {alpha_react}"})}
-        yield {"event": "log", "data": json.dumps({"line": f"  [{rnd}/30]"})}
-        await asyncio.sleep(0.1)
-
-    yield {"event": "log", "data": json.dumps({"line": "DONE (stopped at cap 30) after 30 exchanges"})}
+    yield {"event": "log", "data": json.dumps({"line": "DONE — stopped at cap 30 (no convergence)"})}
+    yield {"event": "log", "data": json.dumps({
+        "line": f"RESULT: 0 confirmed mappings · {confirmed}/{len(concepts)} grounded · alignment unverifiable"})}
     yield {"event": "result", "data": json.dumps({
         "scenario": "free_form",
-        "text": "stopped at cap 30 — 0 confirmed mappings",
+        "text": "stopped at cap 30 — 0 confirmed mappings (no grounding channel)",
         "run_id": uuid4().hex[:8],
     })}
     yield {"event": "done", "data": json.dumps({"scenario": "free_form"})}
