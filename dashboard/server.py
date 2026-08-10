@@ -227,7 +227,7 @@ def _agent_info():
                 "sample_message": {
                     "role": "ROLE_USER",
                     "parts": [
-                        {"text": "*points at the river* River!"},
+                        {"text": "alpha proposes \u2248 for river -> beta"},
                     ],
                     "_note": "Plain text only — no participants, no episode, no grounding, no belief, no ToM",
                 },
