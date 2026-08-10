@@ -282,7 +282,35 @@
     .fx .aurora, .fx .grid, .fx .spark, .usecase-tab.active,
     .btn-run::after, .status-dot.running, header h1, header p{ animation:none !important; }
     .grad{ animation:none !important; }
+    .token-hero .th-pct{ animation:none !important; }
   }
+
+  /* ═══════════════════ TOKEN SAVINGS HERO (Demo 2) ═══════════════════ */
+  .token-hero{ padding:22px 26px; display:flex; align-items:center; justify-content:space-between;
+    gap:28px; flex-wrap:wrap;
+    background:linear-gradient(120deg, rgba(52,211,153,.10), rgba(15,22,38,.72) 42%, rgba(167,139,250,.10));
+    border:1px solid rgba(52,211,153,.22); }
+  .token-hero.grounding{ background:linear-gradient(120deg, rgba(167,139,250,.12), rgba(15,22,38,.72) 42%, rgba(56,189,248,.10));
+    border-color:rgba(167,139,250,.24); }
+  .th-headline{ display:flex; align-items:center; gap:18px; }
+  .th-pct{ font-family:'Space Grotesk','Inter',sans-serif; font-weight:800; line-height:1;
+    font-size:64px; letter-spacing:-.02em; font-variant-numeric:tabular-nums;
+    background:linear-gradient(90deg,#34d399,#6ee7b7); -webkit-background-clip:text; background-clip:text; color:transparent;
+    text-shadow:0 0 40px rgba(52,211,153,.25); transition:opacity .2s ease; }
+  .token-hero.grounding .th-pct{ background:linear-gradient(90deg,#a78bfa,#c4b5fd); -webkit-background-clip:text; background-clip:text;
+    text-shadow:0 0 40px rgba(167,139,250,.25); }
+  .th-pct.bump{ animation:thBump .45s cubic-bezier(.3,1.4,.5,1); }
+  @keyframes thBump{ 0%{ transform:scale(1); } 40%{ transform:scale(1.09); } 100%{ transform:scale(1); } }
+  .th-cap-title{ font-size:15px; font-weight:700; color:#e2e8f0; font-family:'Space Grotesk','Inter',sans-serif; }
+  .th-cap-sub{ font-size:11px; color:#94a3b8; margin-top:3px; }
+  .th-stats{ display:flex; align-items:center; gap:20px; }
+  .th-stat{ text-align:center; min-width:78px; }
+  .th-v{ font-size:26px; font-weight:800; line-height:1.1; color:#cbd5e1; font-variant-numeric:tabular-nums; }
+  .th-v.th-good{ color:#34d399; } .th-v.th-save{ color:#fbbf24; }
+  .token-hero.grounding .th-v.th-good{ color:#c4b5fd; }
+  .th-k{ font-size:9px; text-transform:uppercase; letter-spacing:.1em; color:#94a3b8; margin-top:4px; }
+  .th-arrow{ font-size:22px; color:#475569; }
+  @media (max-width:640px){ .th-pct{ font-size:48px; } .token-hero{ justify-content:center; text-align:center; } }
 </style>
 </head>
 <body>
@@ -498,6 +526,32 @@
       <h1 class="text-2xl md:text-3xl font-bold grad" id="cmpTitle">Shrinking the Wire — Emergent Compression</h1>
       <p class="text-slate-400 mt-3 max-w-3xl mx-auto text-xs leading-relaxed" id="cmpSubtitle"></p>
     </header>
+
+    <!-- ═══════════════════ TOKEN SAVINGS HERO ═══════════════════ -->
+    <div class="glass token-hero mb-6" id="cmpTokenHero">
+      <div class="th-headline">
+        <div class="th-pct" id="thPct">0%</div>
+        <div class="th-cap">
+          <div class="th-cap-title" id="thCapTitle">fewer tokens on the wire</div>
+          <div class="th-cap-sub" id="thCapSub">DEFINE once → REFER forever · lossless</div>
+        </div>
+      </div>
+      <div class="th-stats">
+        <div class="th-stat">
+          <div class="th-v" id="thBaseline">—</div>
+          <div class="th-k" id="thBaselineK">plaintext tokens</div>
+        </div>
+        <div class="th-arrow">→</div>
+        <div class="th-stat">
+          <div class="th-v th-good" id="thProtocol">—</div>
+          <div class="th-k" id="thProtocolK">ELP protocol tokens</div>
+        </div>
+        <div class="th-stat">
+          <div class="th-v th-save" id="thSaved">—</div>
+          <div class="th-k">tokens saved</div>
+        </div>
+      </div>
+    </div>
 
     <!-- Sub-tabs (compression / grounding) -->
     <div class="usecase-tabs mb-6">
@@ -990,6 +1044,7 @@ function cmpSetView(v){
   cmpArmsel.style.display = v === "grounding" ? "flex" : "none";
   cmpSlider.max = cmpTotalFor(v) - 1;
   cmpSlider.value = cmpStep[v];
+  seedTokenHero(v);
   cmpRender();
 }
 function cmpSetStep(s){
@@ -1277,6 +1332,58 @@ function runCmpStream(){
   };
 }
 
+// ── Token savings hero (always-visible headline metric) ─────────────────────
+function setTokenHero({pct, baseline, protocol, saved, mode, capTitle, capSub, baselineK, protocolK, bump}){
+  const hero = document.getElementById("cmpTokenHero");
+  if (!hero) return;
+  hero.classList.toggle("grounding", mode === "grounding");
+  const pctEl = document.getElementById("thPct");
+  const pctText = (pct == null ? "—" : Math.max(0, Math.round(pct)) + "%");
+  if (bump && pctEl.textContent !== pctText) {
+    pctEl.classList.remove("bump"); void pctEl.offsetWidth; pctEl.classList.add("bump");
+  }
+  pctEl.textContent = pctText;
+  document.getElementById("thCapTitle").textContent = capTitle;
+  document.getElementById("thCapSub").textContent = capSub;
+  document.getElementById("thBaseline").textContent = baseline == null ? "—" : baseline;
+  document.getElementById("thProtocol").textContent = protocol == null ? "—" : protocol;
+  document.getElementById("thSaved").textContent = saved == null ? "—" : saved;
+  if (baselineK) document.getElementById("thBaselineK").textContent = baselineK;
+  if (protocolK) document.getElementById("thProtocolK").textContent = protocolK;
+}
+
+// Seed the hero from the loaded trace data so it's meaningful before running.
+function seedTokenHero(view){
+  if (view === "compression") {
+    if (typeof D === "undefined" || !D.rounds || !D.rounds.length) { resetTokenHero(view); return; }
+    const f = D.rounds[D.rounds.length - 1];
+    const pct = f.cumPlaintext ? Math.round(100 * (1 - f.cumProtocol / f.cumPlaintext)) : 0;
+    setTokenHero({ pct, baseline: f.cumPlaintext, protocol: f.cumProtocol,
+      saved: f.cumPlaintext - f.cumProtocol, mode: "compression",
+      capTitle: "fewer tokens on the wire", capSub: "DEFINE once → REFER forever · lossless",
+      baselineK: "plaintext tokens", protocolK: "ELP protocol tokens" });
+  } else {
+    if (typeof FC === "undefined" || !FC.arms) { resetTokenHero(view); return; }
+    const names = Object.keys(FC.arms);
+    const tomName = names.find(n => n.includes("tom")) || names[0];
+    const baseName = names.find(n => !n.includes("tom")) || names[names.length-1];
+    const tom = FC.arms[tomName], base = FC.arms[baseName];
+    const tomTok = tom.summary.projTokens, baseTok = base.summary.projTokens;
+    const pct = baseTok ? Math.round(100 * (1 - tomTok / baseTok)) : 0;
+    setTokenHero({ pct, baseline: baseTok, protocol: tomTok, saved: baseTok - tomTok, mode: "grounding",
+      capTitle: "fewer tokens to reliable comms", capSub: "grounds fast → drops the feedback channel",
+      baselineK: "Free-Form tokens", protocolK: "ELP + ToM tokens" });
+  }
+}
+function resetTokenHero(view){
+  setTokenHero({ pct: null, baseline: null, protocol: null, saved: null,
+    mode: view === "grounding" ? "grounding" : "compression",
+    capTitle: view === "grounding" ? "fewer tokens to reliable comms" : "fewer tokens on the wire",
+    capSub: view === "grounding" ? "grounds fast → drops the feedback channel" : "DEFINE once → REFER forever · lossless",
+    baselineK: view === "grounding" ? "Free-Form tokens" : "plaintext tokens",
+    protocolK: view === "grounding" ? "ELP + ToM tokens" : "ELP protocol tokens" });
+}
+
 // ── Comparison panel builders ───────────────────────────────────────────────
 function cmpTile(label, value, cls){
   return `<div class="metric-box"><div class="metric-val ${cls||''}" style="font-size:20px">${esc(String(value))}</div><div class="metric-label">${esc(label)}</div></div>`;
@@ -1297,6 +1404,9 @@ function updateCompressionCompare(d, final){
     : "Streaming mission logs over A2A · watch cumulative tokens diverge…";
 
   const plain = d.cumPlaintext, proto = d.cumProtocol, saved = d.saved, pct = d.pct;
+  setTokenHero({ pct, baseline: plain, protocol: proto, saved, mode: "compression",
+    capTitle: "fewer tokens on the wire", capSub: "DEFINE once → REFER forever · lossless",
+    baselineK: "plaintext tokens", protocolK: "ELP protocol tokens", bump: true });
   document.getElementById("cmpCompareTiles").innerHTML =
     cmpTile("Plaintext tok", plain, "text-slate-300") +
     cmpTile("Protocol tok", proto, "text-emerald-400") +
@@ -1327,6 +1437,12 @@ function updateGroundingCompare(d, final){
   const tom = arms[tomName] || {}, baseline = arms[baseName] || {};
   const tomEff = tom.cumEffective ?? 0, baseEff = baseline.cumEffective ?? 0;
   const plain = d.cumPlaintext ?? d.plaintext ?? 0;
+
+  const heroPct = baseEff > 0 ? Math.round(100 * (1 - tomEff / baseEff)) : 0;
+  setTokenHero({ pct: heroPct, baseline: baseEff, protocol: tomEff, saved: Math.max(0, baseEff - tomEff),
+    mode: "grounding", capTitle: "fewer tokens to reliable comms",
+    capSub: "grounds fast → drops the feedback channel",
+    baselineK: "Free-Form tokens", protocolK: "ELP + ToM tokens", bump: true });
 
   const tiles = [];
   tiles.push(cmpTile("ELP + ToM tok", tomEff, "text-violet-300"));
