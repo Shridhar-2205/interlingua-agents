@@ -1044,7 +1044,7 @@ function cmpSetStep(s){
 }
 function cmpRender(){
   const s = cmpStep[cmpViewName];
-  cmpRoundlbl.textContent = `round ${s} / ${cmpTotalFor(cmpViewName)-1}`;
+  cmpRoundlbl.textContent = `round ${s + 1} / ${cmpTotalFor(cmpViewName)}`;
   cclear(cmpGrid);
   if (cmpViewName === "compression") renderCompression(s); else renderGrounding(s);
 }
