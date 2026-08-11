@@ -337,8 +337,8 @@
       <span class="t-sub">Two agents agree on a shared code</span>
     </button>
     <button class="usecase-tab" id="ucCompression" onclick="setUseCase('compression')">
-      <span class="t-title">Bandwidth &amp; Grounding</span>
-      <span class="t-sub">Compress the wire · ground opaque codes</span>
+      <span class="t-title">Compress Context into Symbols</span>
+      <span class="t-sub">Map long messages → symbols · fewer tokens &amp; context</span>
     </button>
   </div>
 
@@ -525,7 +525,7 @@
 
     <!-- Header -->
     <header class="text-center mb-6">
-      <p class="text-[10px] uppercase tracking-[.2em] text-slate-500 mb-1" id="cmpEyebrow">Use Case 2 · Bandwidth &amp; Grounding</p>
+      <p class="text-[10px] uppercase tracking-[.2em] text-slate-500 mb-1" id="cmpEyebrow">Use Case 2 · Compress Context into Symbols</p>
       <h1 class="text-2xl md:text-3xl font-bold grad" id="cmpTitle">Shrinking the Wire — Emergent Compression</h1>
       <p class="text-slate-400 mt-3 max-w-3xl mx-auto text-xs leading-relaxed" id="cmpSubtitle"></p>
     </header>
@@ -554,18 +554,6 @@
           <div class="th-k">tokens saved</div>
         </div>
       </div>
-    </div>
-
-    <!-- Sub-tabs (compression / grounding) -->
-    <div class="usecase-tabs mb-6">
-      <button class="usecase-tab active" id="cmpTabCompression" data-view="compression" onclick="setCmpView('compression')">
-        <span class="t-title">Token Compression</span>
-        <span class="t-sub">Codebook · DEFINE → REFER</span>
-      </button>
-      <button class="usecase-tab" id="cmpTabGrounding" data-view="grounding" onclick="setCmpView('grounding')">
-        <span class="t-title">Grounding an Opaque Code</span>
-        <span class="t-sub">ELP + Theory of Mind</span>
-      </button>
     </div>
 
     <!-- Controls -->
@@ -613,7 +601,7 @@
     <footer class="text-center text-xs text-slate-600 py-4 space-y-1 mt-2">
       <p>Every message rides over <span class="text-slate-400">A2A (HTTP/JSONRPC · SendMessage)</span> — the emerged code travels as an ELP data part (<span class="text-violet-400">application/vnd.elp+json</span>).</p>
       <p>Token = message payload on the wire (word count) — a model-independent proxy for LLM tokens.</p>
-      <p class="text-slate-700">Compression pays a one-time DEFINE cost; grounding uses opaque codes but must ground them from feedback.</p>
+      <p class="text-slate-700">Long, repeated messages map to compact symbols; ELP + Theory of Mind grounds each symbol fast, then sends the symbol instead of the sentence — fewer tokens and less context re-sent every turn.</p>
     </footer>
 
   </div><!-- end compressionView -->
@@ -989,7 +977,7 @@ function cLegend(items){
 }
 
 let D, FC, cmpGrid, cmpSlider, cmpRoundlbl, cmpPlayBtn, cmpArmsel;
-let cmpViewName = "compression";
+let cmpViewName = "grounding";
 let cmpStep = { compression:0, grounding:0 };
 let fcArm, cmpPlaying = false, cmpTimer = null;
 const CMP_SPEED = 780;
@@ -1024,7 +1012,7 @@ function bootCompression() {
   const qs = new URLSearchParams(location.search);
   if (qs.get("arm") && FC.armOrder.includes(qs.get("arm"))) fcArm = qs.get("arm");
   cmpBuildArmSel();
-  cmpSetView(qs.get("view") === "grounding" ? "grounding" : "compression");
+  cmpSetView("grounding");
   if (qs.get("round") != null) cmpSetStep(parseInt(qs.get("round"), 10) || 0);
 }
 
@@ -1037,22 +1025,13 @@ function setCmpView(v){
 }
 
 function cmpSetView(v){
+  v = "grounding"; // Demo 2 is Grounding an Opaque Code only
   cmpViewName = v;
-  const compTab = document.getElementById('cmpTabCompression');
-  const grndTab = document.getElementById('cmpTabGrounding');
-  compTab.classList.toggle('active', v === 'compression');
-  compTab.classList.toggle('emerald', v === 'compression');
-  grndTab.classList.toggle('active', v === 'grounding');
-  grndTab.classList.toggle('violet', v === 'grounding');
-  document.getElementById("cmpEyebrow").textContent =
-    v === "compression" ? "Use Case 2a · Token Compression" : "Use Case 2b · Grounding (Theory of Mind)";
-  document.getElementById("cmpTitle").textContent =
-    v === "compression" ? "Shrinking the Wire — Emergent Compression" : "Grounding an Opaque Code — Theory of Mind";
+  document.getElementById("cmpEyebrow").textContent = "Use Case 2 · Compress Context into Symbols";
+  document.getElementById("cmpTitle").textContent = "Compress Context into Symbols — Fewer Tokens on the Wire";
   document.getElementById("cmpSubtitle").textContent =
-    v === "compression"
-      ? "Grace (Encoder) relays mission logs to Rocky (Decoder). A codebook (DEFINE once → REFER forever) shrinks each message — deterministic and lossless."
-      : "Grace (Emitter) speaks an OPAQUE code; Rocky (Grounder) must GROUND it. Free-Form A2A relies on plain feedback and never locks the code; ELP-over-A2A + ToM adds an explicit model of the sender's code — grounds fast, then drops the feedback channel.";
-  cmpArmsel.style.display = v === "grounding" ? "flex" : "none";
+    "Grace maps long, repeated messages to compact symbols; Rocky grounds each symbol to its full meaning. Free-Form A2A re-sends the long text and keeps a plain feedback channel open; ELP-over-A2A + ToM models the sender's code — so once a symbol is grounded, every later turn sends the symbol instead of the sentence — fewer tokens and less context re-sent.";
+  cmpArmsel.style.display = "flex";
   cmpSlider.max = cmpTotalFor(v) - 1;
   cmpSlider.value = cmpStep[v];
   seedTokenHero(v);
@@ -1436,10 +1415,10 @@ function updateCompressionCompare(d, final){
 
 function updateGroundingCompare(d, final){
   document.getElementById("cmpCompareSection").style.display = "block";
-  document.getElementById("cmpCompareTitle").textContent = "Grounding — Free-Form A2A vs ELP-over-A2A + ToM";
+  document.getElementById("cmpCompareTitle").textContent = "Sentences → Symbols — Free-Form A2A vs ELP-over-A2A + ToM";
   document.getElementById("cmpCompareSub").textContent = final
-    ? "Final: ELP-over-A2A + ToM grounds fast, drops the feedback channel, and rides the bare wire — cheaper and reliable."
-    : "Streaming opaque code · comparing effective token cost to reliable comms…";
+    ? "Final: ELP-over-A2A + ToM grounds each symbol fast, then sends the symbol instead of the sentence — fewer tokens, less context."
+    : "Streaming symbols · comparing token cost to send the same meaning…";
 
   const arms = d.arms || {};
   const names = Object.keys(arms);
