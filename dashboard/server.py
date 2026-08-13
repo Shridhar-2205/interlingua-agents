@@ -152,23 +152,19 @@ async def _mock_elp():
         })}
         await asyncio.sleep(0.12)
 
-        # Shareable concepts converge; unshareable ones don't
+        # Shareable concepts always converge (6/10 -> steady 60% alignment);
+        # unshareable ones never do (no perceptual overlap).
         if concept in SHAREABLE:
-            if random.random() < 0.55:
-                if speaker == "grace":
-                    rocky_lex[concept] = symbol
-                else:
-                    grace_lex[concept] = symbol
-                aligned.add(concept)
-                history.append({"referent": concept, "symbol": symbol, "accepted": True,
-                                "grounded": True, "speaker": speaker})
-                yield {"event": "log", "data": json.dumps({
-                    "line": f"[{receiver}] accepted {symbol} for {concept} (grounded)"
-                })}
+            if speaker == "grace":
+                rocky_lex[concept] = symbol
             else:
-                yield {"event": "log", "data": json.dumps({
-                    "line": f"[{receiver}] rejected {symbol} for {concept} (low contingency)"
-                })}
+                grace_lex[concept] = symbol
+            aligned.add(concept)
+            history.append({"referent": concept, "symbol": symbol, "accepted": True,
+                            "grounded": True, "speaker": speaker})
+            yield {"event": "log", "data": json.dumps({
+                "line": f"[{receiver}] accepted {symbol} for {concept} (grounded)"
+            })}
         else:
             history.append({"referent": concept, "symbol": symbol, "accepted": False,
                             "grounded": False, "speaker": speaker})
