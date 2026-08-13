@@ -337,7 +337,7 @@
       <span class="t-sub">Two agents agree on a shared code</span>
     </button>
     <button class="usecase-tab" id="ucCompression" onclick="setUseCase('compression')">
-      <span class="t-title">Compress Context into Symbols</span>
+      <span class="t-title">Emergent Shorthand</span>
       <span class="t-sub">Map long messages → symbols · fewer tokens &amp; context</span>
     </button>
   </div>
@@ -525,7 +525,7 @@
 
     <!-- Header -->
     <header class="text-center mb-6">
-      <p class="text-[10px] uppercase tracking-[.2em] text-slate-500 mb-1" id="cmpEyebrow">Use Case 2 · Compress Context into Symbols</p>
+      <p class="text-[10px] uppercase tracking-[.2em] text-slate-500 mb-1" id="cmpEyebrow">Use Case 2 · Emergent Shorthand over A2A</p>
       <h1 class="text-2xl md:text-3xl font-bold grad" id="cmpTitle">Shrinking the Wire — Emergent Compression</h1>
       <p class="text-slate-400 mt-3 max-w-3xl mx-auto text-xs leading-relaxed" id="cmpSubtitle"></p>
     </header>
@@ -1027,8 +1027,8 @@ function setCmpView(v){
 function cmpSetView(v){
   v = "grounding"; // Demo 2 is Grounding an Opaque Code only
   cmpViewName = v;
-  document.getElementById("cmpEyebrow").textContent = "Use Case 2 · Compress Context into Symbols";
-  document.getElementById("cmpTitle").textContent = "Compress Context into Symbols — Fewer Tokens on the Wire";
+  document.getElementById("cmpEyebrow").textContent = "Use Case 2 · Emergent Shorthand over A2A";
+  document.getElementById("cmpTitle").textContent = "Agents build a shared shorthand as they talk: same meaning and fewer tokens";
   document.getElementById("cmpSubtitle").textContent =
     "Grace maps long, repeated messages to compact symbols; Rocky grounds each symbol to its full meaning. Free-Form A2A re-sends the long text and keeps a plain feedback channel open; ELP-over-A2A + ToM models the sender's code — so once a symbol is grounded, every later turn sends the symbol instead of the sentence — fewer tokens and less context re-sent.";
   cmpArmsel.style.display = "flex";
