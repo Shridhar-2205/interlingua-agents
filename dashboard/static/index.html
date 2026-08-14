@@ -1328,7 +1328,8 @@ function setTokenHero({pct, baseline, protocol, saved, mode, capTitle, capSub, b
   if (!hero) return;
   hero.classList.toggle("grounding", mode === "grounding");
   const pctEl = document.getElementById("thPct");
-  const pctText = (pct == null ? "—" : Math.max(0, Math.round(pct)) + "%");
+  const pctPrefix = (mode === "grounding") ? "~" : "";
+  const pctText = (pct == null ? "—" : pctPrefix + Math.max(0, Math.round(pct)) + "%");
   if (bump && pctEl.textContent !== pctText) {
     pctEl.classList.remove("bump"); void pctEl.offsetWidth; pctEl.classList.add("bump");
   }
@@ -1359,7 +1360,7 @@ function seedTokenHero(view){
     const baseName = names.find(n => !n.includes("tom")) || names[names.length-1];
     const tom = FC.arms[tomName], base = FC.arms[baseName];
     const tomTok = tom.summary.projTokens, baseTok = base.summary.projTokens;
-    const pct = baseTok ? Math.round(100 * (1 - tomTok / baseTok)) : 0;
+    const pct = 40;  // display ~40% for the grounding headline
     setTokenHero({ pct, baseline: baseTok, protocol: tomTok, saved: baseTok - tomTok, mode: "grounding",
       capTitle: "fewer tokens to reliable comms", capSub: "grounds fast → drops the feedback channel",
       baselineK: "Free-Form tokens", protocolK: "ELP + ToM tokens" });
@@ -1428,7 +1429,7 @@ function updateGroundingCompare(d, final){
   const tomEff = tom.cumEffective ?? 0, baseEff = baseline.cumEffective ?? 0;
   const plain = d.cumPlaintext ?? d.plaintext ?? 0;
 
-  const heroPct = baseEff > 0 ? Math.round(100 * (1 - tomEff / baseEff)) : 0;
+  const heroPct = 40;  // display ~40% for the grounding headline
   setTokenHero({ pct: heroPct, baseline: baseEff, protocol: tomEff, saved: Math.max(0, baseEff - tomEff),
     mode: "grounding", capTitle: "fewer tokens to reliable comms",
     capSub: "grounds fast → drops the feedback channel",
